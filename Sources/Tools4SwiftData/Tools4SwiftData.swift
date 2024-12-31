@@ -15,7 +15,7 @@ public enum Tools4SwiftData: LocalizedError {
         
         switch self {
         case .internalError:
-            return String(localized: "error-swiftdata")
+            return String(localized: "error-swiftdata", bundle: .module)
         }
     }
 }
