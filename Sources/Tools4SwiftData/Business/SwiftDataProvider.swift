@@ -13,26 +13,32 @@ import SwiftData
 ///
 /// @brief
 ///    This class is purposed to be a provider for the `SwiftData` shared persistence container.
-///    Using a `@MainActor` pinned, singleton, instance of this class, we basically have the foundation to
-///    Create a `ModelContext` whevener it's needed, using the same `ModelContainer`.
+///    Using this, we have the foundation to create a `ModelContainer` using structured concurrency.
 ///
-///    - Important: Sendable conformation is achieved through `@MainActor` pinning of the singleton instance.
+///    - Note: This approach works because while `ModelContainer` is, in fact, `Sendable`, `ModelContext` is not,
+///    so we just leave it to the `SwiftDataManager`, that will craete it's own while keeping it concurrency safe
 public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
 
-    /// The `ModelContainer` computed property. Initializes the `ModelConfiguration` and tries to
-    /// create the shared model container. Presents the exception, eventually, and terminates the application as needed.
-    ///
-    /// - Important: `@MainActor` pinning is necessary since the closure is synchronous within the main thread.
+    /// This property holds the `ModelContainer` instance.
     public let persistenceContainer: ModelContainer
     
-    /// A useful method to generate a `SwiftDataManager` instance using the shared model container.
+    /// Creates a `SwiftDataManager` instance using the shared `ModelContainer`.
+    ///
+    /// - Returns: A `SwiftDataManager` instance configured using the above persistence container.
+    ///
+    /// - Note: This method simplifies access to the data manager, ensuring all operations
+    ///   are consistent with the shared persistence container.
     public func managerCreator() -> SwiftDataManager<Transferable> {
         return SwiftDataManager(modelContainer: persistenceContainer)
     }
     
-    /// The initializer needs to be private so that only the shared instance can be used.
+    /// Initializes the `SwiftDataProvider` with a specified file location for data storage.
     ///
-    /// - Important: `@MainActor` pinning is necessary because the static property (which uses this init()), is also `@MainActor` pinned.
+    /// - Parameter writeDataStoreAt: The directory where the persistent store file will be created.
+    /// - Throws: An error if the `ModelContainer` initialization fails.
+    ///
+    /// - Important: The initializer is public to allow external creation of `SwiftDataProvider` instances,
+    ///   but proper error handling should be implemented to manage initialization failures.
     public init(writeDataStoreAt: URL) throws {
         
         let fileName = Transferable.PersistableType.filePrefix + ".sqlite"
