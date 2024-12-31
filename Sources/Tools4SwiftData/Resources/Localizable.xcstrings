@@ -1,0 +1,23 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "error-swiftdata" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An unknown error has occurred while retrieving data from the internal database"
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Si è verificato un errore sconosciuto durante il recupero di informazioni dalla base dati interna"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
