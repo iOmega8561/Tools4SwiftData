@@ -5,6 +5,8 @@
 //  Created by Giuseppe Rocco on 31/12/24.
 //
 
+@_exported import SwiftData
+
 import Foundation
 
 public enum Tools4SwiftData: LocalizedError {
