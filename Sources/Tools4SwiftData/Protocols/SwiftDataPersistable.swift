@@ -23,6 +23,13 @@ public protocol SwiftDataPersistable: PersistentModel {
 
     static var filePrefix: String { get }
     
+    /// Updates the current instance based on submitted configurable object
+    ///
+    /// This method should implement the necessary logic that better suits the use case.
+    /// It's up to who will implement the actual function to decide whether all instance properties
+    /// should be updated or just a small part of it.
+    func update(using configurable: ConfigurableType) throws
+    
     /// Initializes the persistent model with a validated configurable model.
     ///
     /// - Parameter configurableModel: A validated instance conforming to

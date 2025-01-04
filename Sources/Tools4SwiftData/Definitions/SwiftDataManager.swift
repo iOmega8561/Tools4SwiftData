@@ -21,7 +21,7 @@ import SwiftData
 @ModelActor public final actor SwiftDataManager<Transferable: SwiftDataTransferable> {
     
     // MARK: - Type Aliases
-        
+    
     /// The associated persistable type that conforms to `SwiftDataPersistent`, derived from the
     /// specified `Transferable` type.
     public typealias Persistable = Transferable.PersistableType
@@ -30,7 +30,7 @@ import SwiftData
     public typealias Configurable = Persistable.ConfigurableType
     
     // MARK: - Fetching Data
-        
+    
     /// Retrieves all instances of the `Persistable` type from the datastore and maps them to `Transferable` objects.
     ///
     /// - Returns: An array of `Transferable` objects representing the data stored in the datastore.
@@ -66,7 +66,7 @@ import SwiftData
     }
     
     // MARK: - Adding Data
-        
+    
     /// Adds a new item to the datastore using the provided configurable model.
     ///
     /// - Parameters:
@@ -80,7 +80,7 @@ import SwiftData
     @discardableResult
     public func addItem(_ configurable: Configurable) throws -> PersistentIdentifier {
         
-        try configurable.validate()
+        try configurable.validate(for: .creation)
         let item = Persistable(configurable)
         
         modelContext.insert(item)
@@ -100,7 +100,7 @@ import SwiftData
     /// immediately receive it back as a transferable data transfer object.
     public func addItem(_ configurable: Configurable) throws -> Transferable {
         
-        try configurable.validate()
+        try configurable.validate(for: .creation)
         let item = Persistable(configurable)
         
         modelContext.insert(item)
@@ -110,7 +110,7 @@ import SwiftData
     }
     
     // MARK: - Deleting Data
-        
+    
     /// Deletes an item from the datastore by its identifier.
     ///
     /// - Parameters:
@@ -135,7 +135,7 @@ import SwiftData
     }
     
     // MARK: - Updating Data
-        
+    
     /// Updates a specific item in the datastore.
     ///
     /// - Parameters:
@@ -163,4 +163,32 @@ import SwiftData
         
         return Transferable(item)
     }
+    
+    /// Updates a specific item in the datastore using a configurable instance.
+    ///
+    /// - Parameters:
+    ///   - id: The `PersistentIdentifier` of the model instance to update.
+    ///   - configurable: A `@Sendable` closure that modifies the given `Persistable` model instance.
+    /// - Returns: A `Transferable` instance representing the updated model.
+    /// - Throws: A `Tools4SwiftData.internalError` if the item is not found or if saving fails.
+    /// - Important: The `@discardableResult` attribute suppresses warnings if the return value is unused.
+    ///
+    /// This method triggers an update on the model using the provided configurable instance and the `.update(using: ...)`
+    /// facilty. Before performing the update, the configurable instance is validated for `.update`
+    @discardableResult
+    public func updateItem(
+        id: PersistentIdentifier,
+        configurable: Configurable
+    ) throws -> Transferable {
+        
+        guard let item = self[id, as: Persistable.self] else {
+            throw Tools4SwiftData.internalError
+        }
+        
+        try configurable.validate(for: .update)
+        try item.update(using: configurable)
+        try modelContext.save()
+        
+        return Transferable(item)
+    }    
 }
