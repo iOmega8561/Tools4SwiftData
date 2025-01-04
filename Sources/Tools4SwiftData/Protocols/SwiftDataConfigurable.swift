@@ -24,5 +24,7 @@ public protocol SwiftDataConfigurable: Sendable {
     /// all required fields are populated or verifying that values are within
     /// acceptable ranges. Typically, this is called before attempting to use
     /// the model in a persistence or transfer operation.
-    func validate() throws
+    ///
+    /// - Parameter scope: The scope for which the configurable should be validated.
+    func validate(for scope: SwiftDataValidationScope) throws
 }

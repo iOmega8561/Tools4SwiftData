@@ -34,12 +34,14 @@ public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
     
     /// Initializes the `SwiftDataProvider` with a specified file location for data storage.
     ///
-    /// - Parameter writeDataStoreAt: The directory where the persistent store file will be created.
+    /// - Parameters:
+    ///   - writeDataStoreAt: The directory where the persistent store file will be created.
+    ///   - migrationPlan: The schema migration plan type, if provided. Defaults to nil
     /// - Throws: An error if the `ModelContainer` initialization fails.
     ///
     /// - Important: The initializer is public to allow external creation of `SwiftDataProvider` instances,
     ///   but proper error handling should be implemented to manage initialization failures.
-    public init(writeDataStoreAt: URL) throws {
+    public init(writeDataStoreAt: URL, migrationPlan: SchemaMigrationPlan.Type? = nil) throws {
         
         let fileName = Transferable.PersistableType.filePrefix + ".sqlite"
         
@@ -49,6 +51,7 @@ public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
         
         self.persistenceContainer = try ModelContainer(
             for: Transferable.PersistableType.self,
+            migrationPlan: migrationPlan,
             configurations: modelConfiguration
         )
     }
