@@ -16,7 +16,7 @@ import SwiftData
 ///    Using this, we have the foundation to create a `ModelContainer` using structured concurrency.
 ///
 ///    - Note: This approach works because while `ModelContainer` is, in fact, `Sendable`, `ModelContext` is not,
-///    so we just leave it to the `SwiftDataManager`, that will craete it's own while keeping it concurrency safe
+///    so we just leave it to the `SwiftDataManager`, that will create it's own while keeping it concurrency safe
 public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
 
     /// This property holds the `ModelContainer` instance.
