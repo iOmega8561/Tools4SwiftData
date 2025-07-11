@@ -87,16 +87,21 @@ import SwiftData
     ///
     /// - Parameters:
     ///   - configurable: An instance of `Configurable` containing the configuration data for the new model.
+    ///   - skipValidation: if set to `true`, does not call the `validate(:_)` method on the `Configurable` instance.
     /// - Returns: The `PersistentIdentifier` of the newly inserted model.
     /// - Throws: An error if saving to the datastore fails.
     /// - Important: The `@discardableResult` attribute suppresses warnings if the return value is unused.
+    /// - Important: Settings `skipValidation` as `true` is not recommended! USE ONLY FOR ADVANCED SCENARIOS!
     ///
     /// This method takes a validated `Configurable` object, creates a `Persistable` model from it, inserts
     /// the model into the datastore, and commits the changes.
     @discardableResult
-    public func addItem(_ configurable: Configurable) throws -> PersistentIdentifier {
+    public func addItem(_ configurable: Configurable, skipValidation: Bool = false) throws -> PersistentIdentifier {
         
-        try configurable.validate(for: .creation)
+        if !skipValidation {
+            try configurable.validate(for: .creation)
+        }
+        
         let item = Persistable(configurable)
         
         modelContext.insert(item)
@@ -109,14 +114,19 @@ import SwiftData
     ///
     /// - Parameters:
     ///   - configurable: An instance of `Configurable` containing the configuration data for the new model.
+    ///   - skipValidation: if set to `true`, does not call the `validate(:_)` method on the `Configurable` instance.
     /// - Returns: A `Transferable` instance representing the newly added model.
     /// - Throws: An error if saving to the datastore fails.
+    /// - Important: Settings `skipValidation` as `true` is not recommended! USE ONLY FOR ADVANCED SCENARIOS!
     ///
     /// This method provides a convenience function to add a new item to the datastore and
     /// immediately receive it back as a transferable data transfer object.
-    public func addItem(_ configurable: Configurable) throws -> Transferable {
+    public func addItem(_ configurable: Configurable, skipValidation: Bool = false) throws -> Transferable {
         
-        try configurable.validate(for: .creation)
+        if !skipValidation {
+            try configurable.validate(for: .creation)
+        }
+        
         let item = Persistable(configurable)
         
         modelContext.insert(item)
