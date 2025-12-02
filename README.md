@@ -6,7 +6,7 @@
   </a>
 
   [![Swift](https://img.shields.io/badge/Swift-5.9-orange.svg)](https://swift.org/download/)
-  <p>A comprehensive framework for streamlined data persistence, transfer, and management in Swift.<br>Leverages Swift's concurrency model and structured protocols for reliable data workflows.</p>
+  <p>A comprehensive framework for streamlined data persistence, transfer, and management in Swift.<br>Takes advantage of Swift's concurrency model and structured protocols for reliable data workflows.</p>
   
 </div>
 
