@@ -22,18 +22,17 @@
 //
 
 import Foundation
-
 import SwiftData
 
 /// The SwiftDataProvider class
 ///
 /// @brief
-///    This class is purposed to be a provider for the `SwiftData` shared persistence container.
-///    Using this, we have the foundation to create a `ModelContainer` using structured concurrency.
+///    Struct acting as the main provider for the `SwiftData` shared persistence container.
+///    The associated `persistenceContainer` property is an instance of the sendable `ModelContainer` class.
 ///
 ///    - Note: This approach works because while `ModelContainer` is, in fact, `Sendable`, `ModelContext` is not,
-///    so we just leave it to the `SwiftDataManager`, that will create it's own while keeping it concurrency safe
-public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
+///    so we just leave it to the `SwiftDataManager`, that will create it's own context while keeping it concurrency safe.
+public struct SwiftDataProvider<Persistable: SwiftDataPersistable>: Sendable {
 
     /// This property holds the `ModelContainer` instance.
     public let persistenceContainer: ModelContainer
@@ -44,29 +43,33 @@ public struct SwiftDataProvider<Transferable: SwiftDataTransferable>: Sendable {
     ///
     /// - Note: This method simplifies access to the data manager, ensuring all operations
     ///   are consistent with the shared persistence container.
-    public func managerCreator() -> SwiftDataManager<Transferable> {
+    public func createManager() -> SwiftDataManager<Persistable> {
         return SwiftDataManager(modelContainer: persistenceContainer)
     }
     
     /// Initializes the `SwiftDataProvider` with a specified file location for data storage.
     ///
     /// - Parameters:
-    ///   - writeDataStoreAt: The directory where the persistent store file will be created.
+    ///   - location: The location URL where the persistent store file will be created. **Should point to a directory**.
     ///   - migrationPlan: The schema migration plan type, if provided. Defaults to nil
     /// - Throws: An error if the `ModelContainer` initialization fails.
     ///
     /// - Important: The initializer is public to allow external creation of `SwiftDataProvider` instances,
     ///   but proper error handling should be implemented to manage initialization failures.
-    public init(writeDataStoreAt: URL, migrationPlan: SchemaMigrationPlan.Type? = nil) throws {
-        
-        let fileName = Transferable.PersistableType.filePrefix + ".sqlite"
+    /// - Note: This initializer uses the associated `Persistable.self` type to compute the database file name.
+    ///   **Renaming the `Persistable` class will cause `ModelConfiguration` to point to a different location on disk.**
+    public init(
+        writingAt location: URL,
+        migrationPlan: SchemaMigrationPlan.Type? = nil
+    ) throws {
+        let name = String(describing: Persistable.self)
         
         let modelConfiguration = ModelConfiguration(
-            url: writeDataStoreAt.appendingPathComponent(fileName)
+            url: location.appendingPathComponent(name + ".sqlite")
         )
         
         self.persistenceContainer = try ModelContainer(
-            for: Transferable.PersistableType.self,
+            for: Persistable.self,
             migrationPlan: migrationPlan,
             configurations: modelConfiguration
         )
