@@ -55,6 +55,12 @@ import SwiftDiagnostics
 /// `@Model` class automatically generates the entire configurable/transferable
 /// infrastructure, enabling the `Transferable → Configurable → Persistable`
 /// conversion workflow without manual boilerplate.
+/// 
+/// - Note: The generated `Configurable` and `Transferable` structs conform
+///   to `Hashable` and `Equatable` automatically. All property types from the
+///   original `@Model` class **must be suitable for Swift's automatic
+///   Hashable/Equatable synthesis**. If a property type does not conform to
+///   `Hashable` or `Equatable`, the generated code will fail to compile.
 public struct DataTransferObject: MemberMacro, ExtensionMacro {
     
     /// Generates the member declarations for a `@Model` class.
