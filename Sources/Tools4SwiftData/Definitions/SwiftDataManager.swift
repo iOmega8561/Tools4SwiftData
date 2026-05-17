@@ -1,5 +1,5 @@
 //
-//  Copyright 2025 Giuseppe Rocco
+//  Copyright 2026 Giuseppe Rocco
 //
 //  Licensed under the Apache License, Version 2.0 (the "License");
 //  you may not use this file except in compliance with the License.
@@ -22,7 +22,6 @@
 //
 
 import Foundation
-
 import SwiftData
 
 /// The actor responsible for managing read/write operations on the `SwiftData` datastore.
@@ -34,15 +33,17 @@ import SwiftData
 /// - Note: This `@ModelActor` leverages Swift's strict concurrency checking to ensure thread-safety
 ///   when accessing the datastore.
 /// - Warning: All methods within this actor should be called asynchronously to prevent concurrency issues.
-@ModelActor public final actor SwiftDataManager<Transferable: SwiftDataTransferable> {
+@ModelActor
+public final actor SwiftDataManager<Persistable: SwiftDataPersistable> {
     
     // MARK: - Type Aliases
     
-    /// The associated persistable type that conforms to `SwiftDataPersistent`, derived from the
-    /// specified `Transferable` type.
-    public typealias Persistable = Transferable.PersistableType
+    /// The associated persistable type that conforms to `SwiftDataTransferable`, derived from the
+    /// specified `Persistable` type.
+    public typealias Transferable = Persistable.TransferableType
     
-    /// The configurable type that conforms to `SwiftDataConfigurable`, used to initialize `Persistable`.
+    /// The configurable type that conforms to `SwiftDataConfigurable`, used to initialize `Persistable` derived from the
+    /// specified `Persistable` type itself.
     public typealias Configurable = Persistable.ConfigurableType
     
     // MARK: - Fetching Data
