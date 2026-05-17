@@ -48,7 +48,7 @@ public enum SwiftDataValidationScope {
     /// - All fields required for the update operation are valid.
     ///
     /// Example scenarios:
-    /// - Validating that immutable fields, such as unique identifiers, are not modified.
-    /// - Ensuring updated values conform to business logic or constraints.
+    /// Ensuring updated values conform to business logic or constraints, like
+    /// strings not being empty, integers being positive ecc.
     case update
 }
