@@ -22,6 +22,7 @@
 //
 
 import Foundation
+import SwiftData
 
 /// A protocol that represents a configurable model in a data workflow.
 /// Types conforming to `SwiftDataConfigurable` must implement validation
@@ -31,16 +32,30 @@ import Foundation
 /// persistence or transfer processes.
 public protocol SwiftDataConfigurable: Sendable {
     
+    associatedtype PersistableType: SwiftDataPersistable where PersistableType.ConfigurableType == Self
+    
+    associatedtype TransferableType: SwiftDataTransferable where PersistableType.TransferableType == TransferableType
+    
+    var persistentModelID: PersistentIdentifier? { get }
+    
     /// Validates the current instance's state.
+    ///
+    /// - Parameter scope: The scope for which the configurable should be validated.
     ///
     /// - Throws: An error if the instance fails to meet validation requirements.
     ///
     /// Implementing types should define validation logic that checks for
-    /// correctness and completeness of the model’s data. For example, ensuring
+    /// correctness and completeness of the model's data. For example, ensuring
     /// all required fields are populated or verifying that values are within
     /// acceptable ranges. Typically, this is called before attempting to use
     /// the model in a persistence or transfer operation.
-    ///
-    /// - Parameter scope: The scope for which the configurable should be validated.
     func validate(for scope: SwiftDataValidationScope) throws
+    
+    /// Initializes the configurable model from a transferable model.
+    ///
+    /// - Parameter dto: A transferable model instance.
+    ///
+    /// Conforming types should use the provided `dto` to
+    /// initialize the configurable model's properties.
+    init(_ dto: TransferableType)
 }

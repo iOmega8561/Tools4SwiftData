@@ -37,14 +37,17 @@ public protocol SwiftDataTransferable: Sendable {
     
     /// The associated persistent type that this transferable model requires
     /// for initialization.
-    associatedtype PersistableType: SwiftDataPersistable
+    associatedtype PersistableType: SwiftDataPersistable where PersistableType.TransferableType == Self
     
+    associatedtype ConfigurableType: SwiftDataConfigurable where ConfigurableType.TransferableType == Self
+    
+    /// The unique identifier of the associated persistent model.
     var persistentModelID: PersistentIdentifier { get }
     
     /// Initializes the transferable model with a persistent model.
     ///
     /// - Parameter persistentModel: An instance conforming to
-    ///   `SwiftDataPersistent`.
+    ///   `PersistableType`.
     ///
     /// Conforming types should use the provided `persistentModel` to
     /// initialize properties needed for data transfer. This ensures that
