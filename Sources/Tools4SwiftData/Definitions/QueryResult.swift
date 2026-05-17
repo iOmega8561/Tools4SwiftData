@@ -50,6 +50,7 @@ import SwiftUI
 ///
 /// - Type Parameter `Persistable`: The persistent model type that this wrapper
 ///   manages. Must conform to `SwiftDataPersistable`.
+@propertyWrapper
 public struct QueryResult<Persistable: SwiftDataPersistable>: DynamicProperty, Identifiable, Sendable {
 
     private let commitCallback: @Sendable (QueryResult<Persistable>) async throws -> Void

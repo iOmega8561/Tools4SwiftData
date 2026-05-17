@@ -36,7 +36,7 @@ import SwiftData
 ///
 /// - Type Parameter `Persistable`: The persistent model type managed by this
 ///   query wrapper. Must conform to `SwiftDataPersistable`.
-@MainActor
+@propertyWrapper @MainActor
 public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
     
     private let dataManager: SwiftDataManager<Persistable>
