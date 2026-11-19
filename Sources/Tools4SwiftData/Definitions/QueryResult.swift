@@ -5,192 +5,186 @@
 //  Created by Giuseppe Rocco on 17/05/2026.
 //
 
+import Foundation
 import SwiftData
 import SwiftUI
 
-/// A property wrapper that represents a single model instance with draft-state support.
+/// A property wrapper that represents a single model with an editable draft.
 ///
-/// `QueryResult` decouples the original persisted state from the editable draft,
-/// enabling safe in-place editing within SwiftUI views without triggering
-/// immediate persistence. It conforms to `DynamicProperty` to integrate seamlessly
-/// with SwiftUI's rendering pipeline and to the `Identifiable` protocol for use
-/// with `ForEach`.
+/// `QueryResult` pairs the snapshot loaded from the store (`original`) with a
+/// draft (`wrappedValue`) kept in `@State`. Declare it on the view that edits
+/// the item, so that SwiftUI installs its state:
 ///
-/// The wrapper maintains two parallel states:
-/// - `original`: The snapshot of the model as it exists in the database, used as
-///   a source of truth for diffing and conflict detection.
-/// - `configurable`: A mutable draft instance that the user can edit inline.
+/// ```swift
+/// struct ItemRow: View {
+///     @QueryResult var item: Item.Configurable
 ///
-/// Editing is exposed through `wrappedValue` (the configurable draft) and
-/// `projectedValue` (a `ProjectedWrapper` providing `$draft.propertyName` bindings).
+///     init(result: QueryResult<Item>) {
+///         _item = result
+///     }
 ///
-/// A `commitCallback` is injected at initialization, allowing the wrapper to remain
-/// decoupled from actual persistence logic. This design enables flexible commit
-/// strategies such as batch saves, optimistic updates, or conflict resolution,
-/// without requiring `QueryResult` to know about `SwiftDataManager` or database
-/// operations.
+///     var body: some View {
+///         TextField("Name", text: $item.name)
+///             .onSubmit { Task { try await $item.commit() } }
+///     }
+/// }
+/// ```
 ///
-/// The reason for using a `struct` with `DynamicProperty` instead of a class
-/// annotated with `@Observable` is twofold:
-/// 1. `@State` in property wrappers requires `DynamicProperty` conformance, and
-///    structs work naturally with SwiftUI's value semantics, avoiding the
-///    reference-based mutation complexity of `@Observable` classes.
-/// 2. `@Observable` introduces automatic dependency tracking that can trigger
-///    unnecessary re-renders when combined with a dual-state pattern. A struct
-///    gives explicit control over what triggers updates and when.
+/// Only instances installed on a view keep the user's edits: the copies held
+/// by `ManagedQuery`'s array always report the draft they were created with.
 ///
-/// The `commitCallback` pattern solves the problem of where commit logic lives.
-/// By capturing it at initialization, `QueryResult` can defer persistence to the
-/// caller, enabling patterns such as:
-/// - Single-item commit: each item saves independently
-/// - Batch commit: collect multiple `QueryResult` instances and persist them
-///   together, reducing round-trips
-/// - Conflict resolution: compare `original` against `configurable` before
-///   committing to detect drift
+/// ## Following the original
 ///
-/// - Type Parameter `Persistable`: The persistent model type that this wrapper
-///   manages. Must conform to `SwiftDataPersistable`.
+/// When a view receives a new `QueryResult` for the same item (after a
+/// commit or a refresh), SwiftUI keeps the existing state and ignores the
+/// new initial value. To keep the draft in sync anyway, the state stores the
+/// draft together with the snapshot it was derived from (its baseline):
+/// - a draft without changes follows `original`, so the view shows fresh data;
+/// - a draft with changes is kept, and `hasConflict` reports whether
+///   `original` changed underneath it.
+///
+/// Draft and snapshot are compared through `Configurable(original)`, which
+/// is rebuilt on each access: keep this in mind for models with very large
+/// to-many relationships.
 @propertyWrapper
 public struct QueryResult<Persistable: SwiftDataPersistable>: DynamicProperty, Identifiable, Sendable {
 
+    public typealias Transferable = Persistable.TransferableType
+    public typealias Configurable = Persistable.ConfigurableType
+
+    /// The draft together with the snapshot it was derived from.
+    private struct DraftState: Sendable {
+        var baseline: Transferable
+        var draft: Configurable
+    }
+
     private let commitCallback: @Sendable (QueryResult<Persistable>) async throws -> Void
-    
-    public let original: Persistable.TransferableType
+
+    /// The snapshot of the item as loaded from the store.
+    public let original: Transferable
 
     @State
-    public var configurable: Persistable.ConfigurableType
-    
+    private var state: DraftState
+
     public var id: PersistentIdentifier {
         original.persistentModelID
     }
-    
-    /// Commits the current draft to the persistent store.
-    ///
-    /// This method invokes the `commitCallback` provided at initialization.
-    /// It is intended to be called when the user confirms changes, e.g. via a
-    /// "Save" button or automatic debounced save.
+
+    /// Whether the draft has no changes of its own, and therefore mirrors
+    /// `original`.
+    private var isFollowingOriginal: Bool {
+        state.draft == Configurable(state.baseline) || state.draft == Configurable(original)
+    }
+
+    /// The editable draft.
+    public var wrappedValue: Configurable {
+        get {
+            isFollowingOriginal ? Configurable(original) : state.draft
+        }
+        nonmutating set {
+            let baseline = isFollowingOriginal ? original : state.baseline
+            state = DraftState(baseline: baseline, draft: newValue)
+        }
+    }
+
+    /// A binding to the draft.
+    public var binding: Binding<Configurable> {
+        Binding(
+            get: { self.wrappedValue },
+            set: { self.wrappedValue = $0 }
+        )
+    }
+
+    /// Whether the draft differs from `original`.
+    public var hasChanges: Bool {
+        wrappedValue != Configurable(original)
+    }
+
+    /// Whether the draft has changes and `original` changed since the draft
+    /// was started, so committing would overwrite someone else's changes.
+    public var hasConflict: Bool {
+        !isFollowingOriginal && state.baseline != original
+    }
+
+    /// Discards the changes and makes the draft follow `original` again.
+    public func reset() {
+        state = DraftState(baseline: original, draft: Configurable(original))
+    }
+
+    /// Commits the draft through the callback provided at initialization.
     ///
     /// - Throws: An error from the persistence layer if the commit fails.
     public func commit() async throws {
         try await commitCallback(self)
     }
-    
-    /// The editable draft instance.
-    public var wrappedValue: Persistable.ConfigurableType {
-        get { configurable }
-        nonmutating set { configurable = newValue }
-    }
-    
-    /// A projected wrapper exposing bindings and a commit action.
+
+    /// The bindings to the draft's properties and the item's actions.
     public var projectedValue: ProjectedWrapper {
-        ProjectedWrapper(
-            binding: $configurable,
-            saveAction: commit
-        )
+        ProjectedWrapper(result: self)
     }
-    
-    /// A helper struct that provides `$draft.propertyName` bindings and a
-    /// convenience `commit()` method.
-    ///
-    /// This wrapper enables inline editing in SwiftUI views:
-    /// ```swift
-    /// TextField($result.$draft.name) {
-    ///     await result.commit()
-    /// }
-    /// ```
+
+    /// Provides `$item.property` bindings and the item's actions.
     @dynamicMemberLookup
     public struct ProjectedWrapper: Sendable {
-        private let binding: Binding<Persistable.ConfigurableType>
-        private let saveAction: @Sendable () async throws -> Void
-        
-        fileprivate init(
-            binding: Binding<Persistable.ConfigurableType>,
-            saveAction: @Sendable @escaping () async throws -> Void
-        ) {
-            self.binding = binding
-            self.saveAction = saveAction
+
+        private let result: QueryResult<Persistable>
+
+        fileprivate init(result: QueryResult<Persistable>) {
+            self.result = result
         }
-        
-        /// Exposes a binding to a specific property on the draft.
-        public subscript<V>(dynamicMember keyPath: WritableKeyPath<Persistable.ConfigurableType, V>) -> Binding<V> {
-            binding[dynamicMember: keyPath]
+
+        /// A binding to a property of the draft.
+        public subscript<V>(dynamicMember keyPath: WritableKeyPath<Configurable, V>) -> Binding<V> {
+            result.binding[dynamicMember: keyPath]
         }
-        
-        /// Convenience alias for committing the draft.
-        @discardableResult
+
+        /// A binding to the whole draft.
+        public var binding: Binding<Configurable> { result.binding }
+
+        /// Whether the draft differs from the stored item.
+        public var hasChanges: Bool { result.hasChanges }
+
+        /// Whether the stored item changed while the draft was being edited.
+        public var hasConflict: Bool { result.hasConflict }
+
+        /// Discards the changes to the draft.
+        public func reset() { result.reset() }
+
+        /// Commits the draft.
         public func commit() async throws {
-            try await saveAction()
+            try await result.commit()
         }
     }
-    
-    /// Initializes a new `QueryResult` with an original snapshot and a commit callback.
+
+    /// Initializes a `QueryResult` from a snapshot and a commit callback.
     ///
-    /// - Parameter original: The transferable snapshot loaded from the persistent store.
-    /// - Parameter commitCallback: A closure that receives this `QueryResult` and
-    ///   persists the draft. The callback is captured to allow decoupled commit strategies.
+    /// - Parameters:
+    ///   - original: The snapshot loaded from the store.
+    ///   - commitCallback: The closure that persists the draft. It receives
+    ///     this `QueryResult`, so that the caller reads the draft from the
+    ///     installed instance.
     public init(
-        original: Persistable.TransferableType,
+        original: Transferable,
         _ commitCallback: @Sendable @escaping (QueryResult<Persistable>) async throws -> Void
     ) {
         self.original = original
-        self.configurable = .init(original)
+        self._state = State(initialValue: DraftState(baseline: original, draft: Configurable(original)))
         self.commitCallback = commitCallback
     }
 }
 
-/// A conditional conformance that enables equality comparison for `QueryResult`
-/// instances when both the configurable and transferable types support it.
+/// Two `QueryResult` values are equal when they wrap the same snapshot.
 ///
-/// Two `QueryResult` instances are considered equal when both their
-/// `configurable` (draft) and `original` (snapshot) states match. This allows
-/// views to detect whether a user's edits have changed since the last load,
-/// or whether two results represent the same logical item.
-///
-/// This conformance is conditional on `ConfigurableType` conforming to
-/// `Equatable`, ensuring that equality is only available when the underlying
-/// types support it. This keeps the protocol requirements flexible and allows
-/// `QueryResult` to be used with any model type, regardless of whether it
-/// defines equality semantics.
-///
-/// - Parameter lhs: The left-hand side instance to compare.
-/// - Parameter rhs: The right-hand side instance to compare.
-///
-/// - Returns: `true` if both the draft and original states match; `false`
-///   otherwise.
-extension QueryResult: Equatable where Persistable.ConfigurableType: Equatable,
-                                       Persistable.TransferableType: Equatable {
-    public static func == (
-        lhs: QueryResult<Persistable>,
-        rhs: QueryResult<Persistable>
-    ) -> Bool {
-        lhs.configurable == rhs.configurable &&
+/// The draft is deliberately left out: it lives in view state, and the
+/// copies held outside a view do not see it.
+extension QueryResult: Equatable {
+    public static func == (lhs: QueryResult<Persistable>, rhs: QueryResult<Persistable>) -> Bool {
         lhs.original == rhs.original
     }
 }
 
-/// A conditional conformance that enables hashing for `QueryResult`
-/// instances when both the configurable and transferable types support it.
-///
-/// Hashing is required for use in sets and dictionaries, and is also useful
-/// for identifying unique items in SwiftUI's `ForEach`, which relies on
-/// `Identifiable` for diffing but benefits from `Hashable` for internal
-/// caching and lookup optimizations.
-///
-/// The hash is computed from both the `configurable` and `original` states,
-/// ensuring that any change to either the draft or the snapshot produces a
-/// different hash. This prevents stale cache entries and ensures that views
-/// correctly detect modifications.
-///
-/// This conformance is conditional on `ConfigurableType` and
-/// `TransferableType` both conforming to `Hashable`, maintaining the same
-/// flexibility as the `Equatable` conformance.
-///
-/// - Parameter hasher: The `Hasher` to combine the instance's properties into.
-extension QueryResult: Hashable where Persistable.ConfigurableType: Hashable,
-                                      Persistable.TransferableType: Hashable {
+extension QueryResult: Hashable {
     public func hash(into hasher: inout Hasher) {
-        hasher.combine(configurable)
         hasher.combine(original)
     }
 }
-

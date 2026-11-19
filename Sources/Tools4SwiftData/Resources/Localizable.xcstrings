@@ -1,23 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "error-not-found" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The requested item does not exist in the database."
-          }
-        },
-        "it" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "L'elemento richiesto non esiste nella base dati."
-          }
-        }
-      }
-    },
     "error-identifier-mismatch" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -35,6 +18,23 @@
         }
       }
     },
+    "error-missing-identifier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The changes do not refer to an existing item."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche non si riferiscono a un elemento esistente."
+          }
+        }
+      }
+    },
     "error-missing-relationship" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -48,6 +48,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Manca un elemento correlato obbligatorio."
+          }
+        }
+      }
+    },
+    "error-not-found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The requested item does not exist in the database."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'elemento richiesto non esiste nella base dati."
           }
         }
       }

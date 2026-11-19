@@ -86,6 +86,9 @@ public enum Tools4SwiftDataError: LocalizedError, Equatable {
     /// A draft was applied to a model other than the one it was taken from.
     case identifierMismatch(expected: PersistentIdentifier, found: PersistentIdentifier)
 
+    /// A draft that should refer to an existing model has no identifier.
+    case missingIdentifier
+
     /// A required to-one relationship has no identifier in the draft.
     case missingRelationship
 
@@ -98,6 +101,8 @@ public enum Tools4SwiftDataError: LocalizedError, Equatable {
             String(localized: "error-not-found", bundle: .module)
         case .identifierMismatch:
             String(localized: "error-identifier-mismatch", bundle: .module)
+        case .missingIdentifier:
+            String(localized: "error-missing-identifier", bundle: .module)
         case .missingRelationship:
             String(localized: "error-missing-relationship", bundle: .module)
         case .unresolvedRelationship:
