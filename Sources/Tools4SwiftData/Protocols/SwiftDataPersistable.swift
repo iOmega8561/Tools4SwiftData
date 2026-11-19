@@ -25,34 +25,42 @@ import SwiftData
 
 /// A protocol that represents a model capable of persisting data.
 ///
-/// Conforming types are expected to initialize using a validated instance of a
-/// `SwiftDataConfigurable` type. This protocol also uses an associated type,
-/// `ConfigurableType`, which must conform to `SwiftDataConfigurable`.
+/// A persistable model is created from, and updated with, a draft of its
+/// `ConfigurableType`, and is read through snapshots of its `TransferableType`.
+/// The `@DataTransferObject` macro generates the whole conformance; it can
+/// also be implemented by hand.
 ///
-/// This protocol is intended to work as part of a data persistence layer,
-/// where configurable models are validated before being persisted.
+/// Both requirements receive the `ModelContext` that owns the operation, so
+/// that relationships expressed as identifiers in the drafts can be resolved
+/// to models of the same context.
 public protocol SwiftDataPersistable: PersistentModel {
-    
-    /// The associated configurable type that this persistent model requires
-    /// for initialization.
-    associatedtype ConfigurableType: SwiftDataConfigurable
 
-    static var filePrefix: String { get }
-    
-    /// Updates the current instance based on submitted configurable object
+    /// The mutable draft type used to create and update this model.
+    associatedtype ConfigurableType: SwiftDataConfigurable where ConfigurableType.PersistableType == Self
+
+    /// The immutable snapshot type used to read this model across isolation domains.
+    associatedtype TransferableType: SwiftDataTransferable where TransferableType.PersistableType == Self
+
+    /// Initializes the model from a draft.
     ///
-    /// This method should implement the necessary logic that better suits the use case.
-    /// It's up to who will implement the actual function to decide whether all instance properties
-    /// should be updated or just a small part of it.
-    func update(using configurable: ConfigurableType) throws
-    
-    /// Initializes the persistent model with a validated configurable model.
+    /// The new model is not inserted into `context`: the caller decides when
+    /// to insert it. Related models created along the way are inserted, so the
+    /// whole graph becomes persistent together with this model.
     ///
-    /// - Parameter configurableModel: A validated instance conforming to
-    ///   `SwiftDataConfigurable`.
+    /// - Parameters:
+    ///   - configurable: The draft to build the model from.
+    ///   - context: The context used to resolve relationships.
+    /// - Throws: An error if a relationship cannot be resolved.
+    init(_ configurable: ConfigurableType, in context: ModelContext) throws
+
+    /// Applies a draft to the model.
     ///
-    /// Conforming types should use the provided `configurableModel` to
-    /// initialize properties needed for persistence. This ensures that all
-    /// persisted models are derived from validated configurations.
-    init(_ configurableModel: ConfigurableType)
+    /// Implementations decide which properties to update; the generated
+    /// implementation updates every property that changed.
+    ///
+    /// - Parameters:
+    ///   - configurable: The draft to apply.
+    ///   - context: The context used to resolve relationships.
+    /// - Throws: An error if a relationship cannot be resolved.
+    func update(using configurable: ConfigurableType, in context: ModelContext) throws
 }

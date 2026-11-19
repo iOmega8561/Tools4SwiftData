@@ -22,25 +22,48 @@
 //
 
 import Foundation
+import SwiftData
 
-/// A protocol that represents a configurable model in a data workflow.
-/// Types conforming to `SwiftDataConfigurable` must implement validation
-/// logic to ensure the model's state is appropriate for usage.
+/// A protocol that represents the mutable draft of a persistable model.
 ///
-/// This protocol is intended to be used as a configuration step in data
-/// persistence or transfer processes.
-public protocol SwiftDataConfigurable: Sendable {
-    
-    /// Validates the current instance's state.
+/// A draft is either created from scratch, to insert a new model, or from a
+/// `TransferableType` snapshot, to update an existing one. In the latter case
+/// `persistentModelID` identifies the model the draft refers to.
+///
+/// Drafts are validated before being persisted. The default `validate(for:)`
+/// accepts every draft; to add rules, implement it in an extension:
+///
+/// ```swift
+/// extension Item.Configurable {
+///     func validate(for scope: SwiftDataValidationScope) throws {
+///         guard !name.isEmpty else { throw ItemError.emptyName }
+///     }
+/// }
+/// ```
+public protocol SwiftDataConfigurable: Hashable, Sendable {
+
+    associatedtype PersistableType: SwiftDataPersistable where PersistableType.ConfigurableType == Self
+
+    associatedtype TransferableType: SwiftDataTransferable where PersistableType.TransferableType == TransferableType
+
+    /// The identifier of the model this draft refers to, `nil` for new models.
+    var persistentModelID: PersistentIdentifier? { get }
+
+    /// Validates the draft.
     ///
-    /// - Throws: An error if the instance fails to meet validation requirements.
-    ///
-    /// Implementing types should define validation logic that checks for
-    /// correctness and completeness of the model’s data. For example, ensuring
-    /// all required fields are populated or verifying that values are within
-    /// acceptable ranges. Typically, this is called before attempting to use
-    /// the model in a persistence or transfer operation.
-    ///
-    /// - Parameter scope: The scope for which the configurable should be validated.
+    /// - Parameter scope: Whether the draft is about to create or update a model.
+    /// - Throws: An error describing why the draft is not valid.
     func validate(for scope: SwiftDataValidationScope) throws
+
+    /// Initializes a draft from a snapshot of an existing model.
+    ///
+    /// - Parameter transferable: The snapshot to copy.
+    init(_ transferable: TransferableType)
+}
+
+extension SwiftDataConfigurable {
+
+    /// Accepts every draft. Implement `validate(for:)` on the conforming type
+    /// to add validation rules.
+    public func validate(for scope: SwiftDataValidationScope) throws {}
 }

@@ -1,7 +1,8 @@
-// swift-tools-version: 5.9
+// swift-tools-version: 6.0
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 
 import PackageDescription
+import CompilerPluginSupport
 
 let package = Package(
     name: "Tools4SwiftData",
@@ -10,19 +11,46 @@ let package = Package(
         .macOS(.v14),
         .iOS(.v17),
         .tvOS(.v17),
+        .watchOS(.v10),
         .visionOS(.v1)
     ],
     products: [
-        // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
             name: "Tools4SwiftData",
             targets: ["Tools4SwiftData"]),
     ],
+    dependencies: [
+        // swift-syntax ships one major version per Swift release: a wide range
+        // lets clients resolve it together with other macro packages.
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0")
+    ],
     targets: [
-        // Targets are the basic building blocks of a package, defining a module or a test suite.
-        // Targets can depend on other targets in this package and products from dependencies.
+        .macro(
+            name: "Tools4SwiftDataMacros",
+            dependencies: [
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftCompilerPlugin", package: "swift-syntax")
+            ]
+        ),
         .target(
-            name: "Tools4SwiftData"),
-
-    ]
+            name: "Tools4SwiftData",
+            dependencies: ["Tools4SwiftDataMacros"]
+        ),
+        .testTarget(
+            name: "Tools4SwiftDataMacrosTests",
+            dependencies: [
+                "Tools4SwiftDataMacros",
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
+            ]
+        ),
+        .testTarget(
+            name: "Tools4SwiftDataTests",
+            dependencies: ["Tools4SwiftData"]
+        )
+    ],
+    swiftLanguageModes: [.v6]
 )

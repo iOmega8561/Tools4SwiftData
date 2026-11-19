@@ -1,19 +1,87 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "error-swiftdata" : {
+    "error-identifier-mismatch" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "An unknown error has occurred while retrieving data from the internal database"
+            "value" : "The changes refer to a different item than the one being updated."
           }
         },
         "it" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Si è verificato un errore sconosciuto durante il recupero di informazioni dalla base dati interna"
+            "value" : "Le modifiche si riferiscono a un elemento diverso da quello che si sta aggiornando."
+          }
+        }
+      }
+    },
+    "error-missing-identifier" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The changes do not refer to an existing item."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Le modifiche non si riferiscono a un elemento esistente."
+          }
+        }
+      }
+    },
+    "error-missing-relationship" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A required related item is missing."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Manca un elemento correlato obbligatorio."
+          }
+        }
+      }
+    },
+    "error-not-found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The requested item does not exist in the database."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "L'elemento richiesto non esiste nella base dati."
+          }
+        }
+      }
+    },
+    "error-unresolved-relationship" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A related item no longer exists in the database."
+          }
+        },
+        "it" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Un elemento correlato non esiste più nella base dati."
           }
         }
       }
