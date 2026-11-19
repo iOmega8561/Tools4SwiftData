@@ -22,6 +22,7 @@
 //
 
 import SwiftSyntax
+import SwiftDiagnostics
 
 /// Collects the stored properties of a `@Model` class that take part in the
 /// data transfer pipeline.
@@ -34,7 +35,18 @@ import SwiftSyntax
 /// Relationships are recognized by an explicit `@Relationship` attribute only:
 /// a macro sees syntax, not types, so it cannot tell whether `Message` is a
 /// `@Model` class or a plain struct.
+///
+/// While extracting, the problems that would make the generated code invalid
+/// are collected as diagnostics: a participating property without type
+/// annotation, an excluded property without default value, a relationship
+/// with an unsupported type.
 struct PropertyExtractor {
+
+    /// The outcome of an extraction.
+    struct Result {
+        let properties: [StoredProperty]
+        let diagnostics: [Diagnostic]
+    }
 
     static let relationshipAttributes: Set<String> = [
         "Relationship", "SwiftData.Relationship"
@@ -51,44 +63,77 @@ struct PropertyExtractor {
         self.classDecl = classDecl
     }
 
-    /// Extracts the participating stored properties, in declaration order.
-    func extract() -> [StoredProperty] {
+    /// Extracts the participating stored properties, in declaration order,
+    /// and the diagnostics for the properties that cannot be handled.
+    func extract() -> Result {
         var properties: [StoredProperty] = []
+        var diagnostics: [Diagnostic] = []
 
         for member in classDecl.memberBlock.members {
             guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-                  !Self.isTypeProperty(varDecl),
-                  !Self.hasAttribute(in: varDecl, named: Self.excludingAttributes) else { continue }
+                  !Self.isTypeProperty(varDecl) else { continue }
 
+            let isExcluded = Self.hasAttribute(in: varDecl, named: Self.excludingAttributes)
             let isRelationship = Self.hasAttribute(in: varDecl, named: Self.relationshipAttributes)
             let bindings = Array(varDecl.bindings)
 
             for (index, binding) in bindings.enumerated() {
                 guard Self.isStored(binding),
-                      let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let type = Self.declaredType(of: index, in: bindings) else { continue }
+                      let name = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text else { continue }
+
+                let type = Self.declaredType(of: index, in: bindings)
+
+                if isExcluded {
+                    let isOptional = type.map(TypeInspector.isOptional) ?? false
+                    if binding.initializer == nil && !isOptional {
+                        diagnostics.append(Diagnostic(
+                            node: binding,
+                            message: MacroDiagnostic.excludedWithoutDefault(property: name)
+                        ))
+                    }
+                    continue
+                }
+
+                guard let type else {
+                    diagnostics.append(Diagnostic(
+                        node: binding,
+                        message: MacroDiagnostic.missingTypeAnnotation(property: name)
+                    ))
+                    continue
+                }
+
+                let shape: PropertyShape
+                if isRelationship {
+                    guard let relationshipShape = TypeInspector.relationshipShape(of: type) else {
+                        diagnostics.append(Diagnostic(
+                            node: type,
+                            message: MacroDiagnostic.unsupportedRelationship(property: name, type: type.trimmedDescription)
+                        ))
+                        continue
+                    }
+                    shape = relationshipShape
+                } else {
+                    shape = .attribute
+                }
 
                 properties.append(makeProperty(
                     name: name,
                     type: type,
                     initializer: binding.initializer?.value,
-                    isRelationship: isRelationship
+                    shape: shape
                 ))
             }
         }
-        return properties
+        return Result(properties: properties, diagnostics: diagnostics)
     }
 
     private func makeProperty(
         name: String,
         type: TypeSyntax,
         initializer: ExprSyntax?,
-        isRelationship: Bool
+        shape: PropertyShape
     ) -> StoredProperty {
         let isOptional = TypeInspector.isOptional(type)
-        let shape: PropertyShape = isRelationship
-            ? TypeInspector.relationshipShape(of: type) ?? .attribute
-            : .attribute
 
         return StoredProperty(
             name: name,

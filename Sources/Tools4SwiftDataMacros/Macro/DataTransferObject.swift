@@ -48,8 +48,8 @@ public struct DataTransferObject: MemberMacro, ExtensionMacro {
 
     /// Generates the member declarations for a `@Model` class.
     ///
-    /// Emits `MacroDiagnostic.onlyClasses` and generates nothing when the
-    /// declaration is not a class.
+    /// Every problem found in the declaration is reported as a diagnostic;
+    /// in that case nothing is generated.
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
@@ -61,13 +61,20 @@ public struct DataTransferObject: MemberMacro, ExtensionMacro {
             return []
         }
 
+        let diagnostics = expander.validate()
+        guard diagnostics.isEmpty else {
+            diagnostics.forEach(context.diagnose)
+            return []
+        }
+
         return expander.expand()
     }
 
     /// Generates the `SwiftDataPersistable` conformance.
     ///
     /// The extension body is empty: the requirements are satisfied by the
-    /// members added by the member expansion. The compiler only lists in
+    /// members added by the member expansion. Nothing is generated for a
+    /// declaration the member expansion rejected. The compiler only lists in
     /// `protocols` the conformances the type does not already have, so an
     /// explicit conformance written by the user produces no extension.
     public static func expansion(
@@ -78,7 +85,11 @@ public struct DataTransferObject: MemberMacro, ExtensionMacro {
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
 
-        guard declaration.is(ClassDeclSyntax.self), !protocols.isEmpty else { return [] }
+        // Diagnostics are reported by the member expansion; here an invalid
+        // declaration only means that no conformance is added.
+        guard !protocols.isEmpty,
+              let expander = PersistableExpander(attribute: node, declaration: declaration),
+              expander.validate().isEmpty else { return [] }
 
         let extensionDecl = try ExtensionDeclSyntax(
             "extension \(type.trimmed): SwiftDataPersistable",

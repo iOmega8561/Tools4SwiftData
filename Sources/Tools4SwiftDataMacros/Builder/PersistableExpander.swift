@@ -22,6 +22,7 @@
 //
 
 import SwiftSyntax
+import SwiftDiagnostics
 
 /// Performs the member expansion of `@DataTransferObject` on a `@Model` class.
 ///
@@ -124,11 +125,30 @@ struct PersistableExpander {
         """
     }
 
+    /// The problems that prevent the expansion: a missing `@Model`
+    /// attribute and every property the macro cannot handle.
+    func validate() -> [Diagnostic] {
+        var diagnostics: [Diagnostic] = []
+
+        let hasModel = classDecl.attributes.contains { element in
+            guard let attribute = element.as(AttributeSyntax.self) else { return false }
+            return ["Model", "SwiftData.Model"].contains(attribute.attributeName.trimmedDescription)
+        }
+        if !hasModel {
+            diagnostics.append(Diagnostic(node: classDecl.name, message: MacroDiagnostic.missingModel))
+        }
+
+        diagnostics += PropertyExtractor(classDecl: classDecl).extract().diagnostics
+        return diagnostics
+    }
+
     /// Produces every member added to the class, in order: the two type
     /// aliases, the `Transferable` and `Configurable` structs, `init(_:in:)`
     /// and `update(using:in:)`.
+    ///
+    /// Call `validate()` first: properties with diagnostics are left out.
     func expand() -> [DeclSyntax] {
-        let props = PropertyExtractor(classDecl: classDecl).extract()
+        let props = PropertyExtractor(classDecl: classDecl).extract().properties
 
         let transferable = DTOBuilder(kind: .transferable, className: className, access: access, properties: props)
         let configurable = DTOBuilder(kind: .configurable, className: className, access: access, properties: props)
