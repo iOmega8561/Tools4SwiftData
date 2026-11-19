@@ -49,6 +49,8 @@ import SwiftData
 ///
 /// - Note: Every attribute type of the model must conform to `Hashable` and
 ///   `Sendable`, because the generated structs do.
+/// - Note: The class still needs an initializer of its own: `@Model` checks
+///   the source of the class and cannot see the generated `init(_:in:)`.
 @attached(member, names:
     named(Transferable),
     named(Configurable),
