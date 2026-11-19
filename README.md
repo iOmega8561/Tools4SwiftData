@@ -207,6 +207,19 @@ Only a `QueryResult` installed on a view sees the user's edits. To commit a draf
 
 ---
 
+## Testing
+
+The package has two test targets:
+
+- **Tools4SwiftDataMacrosTests** (XCTest) pins the complete expansion of `@DataTransferObject` for every kind of property, checks every diagnostic with its position, and unit-tests the syntax helpers. It runs on the host only: with an iOS destination its tests are compiled out.
+- **Tools4SwiftDataTests** (Swift Testing) exercises the library against real SwiftData, with an in-memory store per test: manager, provider, relationships, rollback, validation and errors.
+
+Run them with `swift test`, or with ⌘U in Xcode using the *My Mac* destination.
+
+`ManagedQuery` and the draft state of `QueryResult` are not covered: their `@State` only works once SwiftUI installs it on a view.
+
+---
+
 ## License
 
 Tools4SwiftData is available under the Apache License 2.0. See [LICENSE](LICENSE).

@@ -40,8 +40,16 @@ let package = Package(
             name: "Tools4SwiftDataMacrosTests",
             dependencies: [
                 "Tools4SwiftDataMacros",
+                .product(name: "SwiftSyntax", package: "swift-syntax"),
+                .product(name: "SwiftParser", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacros", package: "swift-syntax"),
+                .product(name: "SwiftSyntaxMacroExpansion", package: "swift-syntax"),
                 .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
             ]
+        ),
+        .testTarget(
+            name: "Tools4SwiftDataTests",
+            dependencies: ["Tools4SwiftData"]
         )
     ],
     swiftLanguageModes: [.v6]

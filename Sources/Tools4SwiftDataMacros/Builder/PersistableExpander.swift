@@ -75,11 +75,10 @@ struct PersistableExpander {
             }
         }
 
-        return """
-        \(raw: access)required init(_ configurable: Configurable, in context: ModelContext) throws {
-            \(raw: body.joined(separator: "\n"))
-        }
-        """
+        return CodeLines.declaration(CodeLines.block(
+            "\(access)required init(_ configurable: Configurable, in context: ModelContext) throws",
+            body: body
+        ))
     }
 
     /// Generates the `update(using:in:)` method required by `SwiftDataPersistable`.
@@ -91,38 +90,35 @@ struct PersistableExpander {
     /// become new models, and orphans are handled according to the macro's
     /// `orphans` argument.
     private func makeUpdate(props: [StoredProperty]) -> DeclSyntax {
-        let body = props.map { prop in
+        let body = props.flatMap { prop -> [String] in
             let current = "self.\(prop.name)"
             let value = "configurable.\(prop.name)"
 
             switch prop.shape {
             case .attribute:
-                return "if \(current) != \(value) { \(current) = \(value) }"
+                return CodeLines.block("if \(current) != \(value)", body: ["\(current) = \(value)"])
             case .toOne(let target, let isOptional):
                 let resolver = isOptional ? "resolveRelationship" : "resolveRequiredRelationship"
                 let currentID = isOptional ? "\(current)?.persistentModelID" : "\(current).persistentModelID"
-                return """
-                if \(currentID) != \(value) {
-                    \(current) = try context.\(resolver)(\(value), as: \(target).self)
-                }
-                """
+                return CodeLines.block(
+                    "if \(currentID) != \(value)",
+                    body: ["\(current) = try context.\(resolver)(\(value), as: \(target).self)"]
+                )
             case .toMany(_, let isOptional):
                 let reconciled = "\(prop.name)Reconciled"
                 let map = isOptional ? "?.map" : ".map"
-                return """
-                let \(reconciled) = try context.reconcile(\(current), with: \(value), orphans: \(orphanPolicy))
-                if \(reconciled)\(map)(\\.persistentModelID) != \(current)\(map)(\\.persistentModelID) {
-                    \(current) = \(reconciled)
-                }
-                """
+                return ["let \(reconciled) = try context.reconcile(\(current), with: \(value), orphans: \(orphanPolicy))"]
+                    + CodeLines.block(
+                        "if \(reconciled)\(map)(\\.persistentModelID) != \(current)\(map)(\\.persistentModelID)",
+                        body: ["\(current) = \(reconciled)"]
+                    )
             }
         }
 
-        return """
-        \(raw: access)func update(using configurable: Configurable, in context: ModelContext) throws {
-            \(raw: body.joined(separator: "\n"))
-        }
-        """
+        return CodeLines.declaration(CodeLines.block(
+            "\(access)func update(using configurable: Configurable, in context: ModelContext) throws",
+            body: body
+        ))
     }
 
     /// The problems that prevent the expansion: a missing `@Model`

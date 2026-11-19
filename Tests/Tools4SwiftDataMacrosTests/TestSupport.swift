@@ -21,13 +21,40 @@
 //  Created on 19/11/2026.
 //
 
+#if canImport(Tools4SwiftDataMacros)
+
+import SwiftParser
+import SwiftSyntax
 import SwiftSyntaxMacros
-import Tools4SwiftDataMacros
+import SwiftSyntaxMacroExpansion
+import SwiftSyntaxMacrosTestSupport
+@testable import Tools4SwiftDataMacros
 
 /// The macros under test, keyed by the name used in source.
 ///
-/// Pass it to `assertMacroExpansion(_:expandedSource:diagnostics:macros:)`.
-let testMacros: [String: Macro.Type] = [
-    "DataTransferObject": DataTransferObject.self,
-    "IgnoredByDTO": IgnoredByDTO.self
+/// `DataTransferObject` declares the `SwiftDataPersistable` conformance, as
+/// the real macro declaration does: without it the extension expansion
+/// would receive no protocols and generate nothing.
+let testMacros: [String: MacroSpec] = [
+    "DataTransferObject": MacroSpec(type: DataTransferObject.self, conformances: ["SwiftDataPersistable"]),
+    "IgnoredByDTO": MacroSpec(type: IgnoredByDTO.self)
 ]
+
+/// Parses a type, for the unit tests of the type helpers.
+func parseType(_ source: String) -> TypeSyntax {
+    var parser = Parser(source)
+    return TypeSyntax.parse(from: &parser)
+}
+
+/// Parses a class declaration, for the unit tests of the extractor.
+func parseClass(_ source: String) -> ClassDeclSyntax {
+    let file = Parser.parse(source: source)
+    for statement in file.statements {
+        if let classDecl = statement.item.as(ClassDeclSyntax.self) {
+            return classDecl
+        }
+    }
+    fatalError("No class declaration in source")
+}
+
+#endif

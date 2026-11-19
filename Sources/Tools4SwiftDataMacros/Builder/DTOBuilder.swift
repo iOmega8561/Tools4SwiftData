@@ -87,59 +87,68 @@ struct DTOBuilder {
     // MARK: - Structs
 
     private func generateTransferable() -> DeclSyntax {
-        let declarations = properties.map { "\(access)let \($0.name): \(declaredType(for: $0))" }
-        let assignments = properties.map { "self.\($0.name) = \(conversion(for: $0, from: "persistentModel"))" }
-
         // A model that declares its own `id` already satisfies `Identifiable`.
-        let idProperty = properties.contains { $0.name == "id" }
-            ? ""
-            : "\(access)var id: PersistentIdentifier { persistentModelID }"
+        let hasOwnID = properties.contains { $0.name == "id" }
 
-        return """
-        \(raw: access)struct Transferable: SwiftDataTransferable, Identifiable {
-            \(raw: access)typealias PersistableType = \(raw: className)
-            \(raw: access)typealias ConfigurableType = \(raw: className).Configurable
+        let typeAliases = [
+            "\(access)typealias PersistableType = \(className)",
+            "\(access)typealias ConfigurableType = \(className).Configurable"
+        ]
+        let storage = ["\(access)let persistentModelID: PersistentIdentifier"]
+            + (hasOwnID ? [] : CodeLines.block("\(access)var id: PersistentIdentifier", body: ["persistentModelID"]))
+            + properties.map { "\(access)let \($0.name): \(declaredType(for: $0))" }
+        let initializer = CodeLines.block(
+            "\(access)init(_ persistentModel: \(className))",
+            body: ["self.persistentModelID = persistentModel.persistentModelID"]
+                + properties.map { "self.\($0.name) = \(conversion(for: $0, from: "persistentModel"))" }
+        )
 
-            \(raw: access)let persistentModelID: PersistentIdentifier
-            \(raw: idProperty)
-            \(raw: declarations.joined(separator: "\n"))
-
-            \(raw: access)init(_ persistentModel: \(raw: className)) {
-                self.persistentModelID = persistentModel.persistentModelID
-                \(raw: assignments.joined(separator: "\n"))
-            }
-        }
-        """
+        return CodeLines.declaration(CodeLines.block(
+            "\(access)struct Transferable: SwiftDataTransferable, Identifiable",
+            body: CodeLines.sections([typeAliases, storage, initializer])
+        ))
     }
 
     private func generateConfigurable() -> DeclSyntax {
-        let declarations = properties.map { "\(access)var \($0.name): \(declaredType(for: $0))" }
-        let assignments = properties.map { "self.\($0.name) = \(conversion(for: $0, from: "transferable"))" }
-        let parameters = properties.map { property in
-            let parameter = "\(property.name): \(declaredType(for: property))"
-            guard let defaultValue = memberwiseDefault(for: property) else { return parameter }
-            return "\(parameter) = \(defaultValue)"
+        let typeAliases = [
+            "\(access)typealias PersistableType = \(className)",
+            "\(access)typealias TransferableType = \(className).Transferable"
+        ]
+        let storage = ["\(access)private(set) var persistentModelID: PersistentIdentifier? = nil"]
+            + properties.map { "\(access)var \($0.name): \(declaredType(for: $0))" }
+        let fromTransferable = CodeLines.block(
+            "\(access)init(_ transferable: \(className).Transferable)",
+            body: ["self.persistentModelID = transferable.persistentModelID"]
+                + properties.map { "self.\($0.name) = \(conversion(for: $0, from: "transferable"))" }
+        )
+
+        return CodeLines.declaration(CodeLines.block(
+            "\(access)struct Configurable: SwiftDataConfigurable",
+            body: CodeLines.sections([typeAliases, storage, memberwiseInit(), fromTransferable])
+        ))
+    }
+
+    /// The memberwise initializer of `Configurable`, one parameter per line.
+    private func memberwiseInit() -> [String] {
+        guard !properties.isEmpty else {
+            return ["\(access)init() {}"]
         }
-        let memberwiseAssignments = properties.map { "self.\($0.name) = \($0.name)" }
 
-        return """
-        \(raw: access)struct Configurable: SwiftDataConfigurable {
-            \(raw: access)typealias PersistableType = \(raw: className)
-            \(raw: access)typealias TransferableType = \(raw: className).Transferable
-
-            \(raw: access)private(set) var persistentModelID: PersistentIdentifier? = nil
-            \(raw: declarations.joined(separator: "\n"))
-
-            \(raw: access)init(\(raw: parameters.joined(separator: ",\n"))) {
-                \(raw: memberwiseAssignments.joined(separator: "\n"))
+        var parameters: [String] = []
+        for (index, property) in properties.enumerated() {
+            var parameter = "\(property.name): \(declaredType(for: property))"
+            if let defaultValue = memberwiseDefault(for: property) {
+                parameter += " = \(defaultValue)"
             }
-
-            \(raw: access)init(_ transferable: \(raw: className).Transferable) {
-                self.persistentModelID = transferable.persistentModelID
-                \(raw: assignments.joined(separator: "\n"))
+            if index < properties.count - 1 {
+                parameter += ","
             }
+            parameters.append(parameter)
         }
-        """
+
+        return ["\(access)init("]
+            + CodeLines.indented(parameters)
+            + CodeLines.block(")", body: properties.map { "self.\($0.name) = \($0.name)" })
     }
 
     // MARK: - Per-property generation
