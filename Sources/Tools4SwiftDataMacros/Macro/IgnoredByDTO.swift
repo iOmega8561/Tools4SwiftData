@@ -24,21 +24,19 @@
 import SwiftSyntax
 import SwiftSyntaxMacros
 
-/// A `PeerMacro` that marks a property to be ignored by the `DataTransferObject`
-/// macro during code generation.
+/// A `PeerMacro` that marks a property to be ignored by the
+/// `DataTransferObject` macro during code generation.
 ///
 /// `IgnoredByDTO` does not generate any code itself; it serves purely as
-/// metadata within the AST. When `PersistableExpander` parses a class
-/// declaration, it detects properties annotated with `@IgnoredByDTO` (or
-/// `@Tools4SwiftData.IgnoredByDTO`) and sets their `isIgnored` flag to `true`,
-/// causing them to be excluded from:
-/// - Generated `Configurable` and `Transferable` structs
-/// - `init(_:)` assignments
-/// - `update(using:)` logic
+/// metadata within the AST. `PropertyExtractor` skips properties annotated
+/// with `@IgnoredByDTO` (or `@Tools4SwiftData.IgnoredByDTO`), so they are
+/// excluded from:
+/// - the generated `Configurable` and `Transferable` structs
+/// - `init(_:in:)`, which is why they need a default value
+/// - `update(using:in:)`
 ///
-/// This is useful for properties that should not participate in the data
-/// transfer pipeline, such as private state, transient values, or computed
-/// properties that are managed separately.
+/// Typical uses are caches, transient state, and one side of a many-to-many
+/// relationship, which would otherwise be embedded recursively.
 public struct IgnoredByDTO: PeerMacro {
     
     /// Generates no code for the annotated declaration.

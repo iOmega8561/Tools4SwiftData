@@ -11,6 +11,7 @@ let package = Package(
         .macOS(.v14),
         .iOS(.v17),
         .tvOS(.v17),
+        .watchOS(.v10),
         .visionOS(.v1)
     ],
     products: [
@@ -19,7 +20,9 @@ let package = Package(
             targets: ["Tools4SwiftData"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/swiftlang/swift-syntax.git", from: "600.0.0")
+        // swift-syntax ships one major version per Swift release: a wide range
+        // lets clients resolve it together with other macro packages.
+        .package(url: "https://github.com/swiftlang/swift-syntax.git", "600.0.0"..<"603.0.0")
     ],
     targets: [
         .macro(
@@ -32,6 +35,13 @@ let package = Package(
         .target(
             name: "Tools4SwiftData",
             dependencies: ["Tools4SwiftDataMacros"]
+        ),
+        .testTarget(
+            name: "Tools4SwiftDataMacrosTests",
+            dependencies: [
+                "Tools4SwiftDataMacros",
+                .product(name: "SwiftSyntaxMacrosTestSupport", package: "swift-syntax")
+            ]
         )
     ],
     swiftLanguageModes: [.v6]

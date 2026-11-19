@@ -62,16 +62,17 @@ public macro DataTransferObject(
     orphans: OrphanPolicy = .detach
 ) = #externalMacro(module: "Tools4SwiftDataMacros", type: "DataTransferObject")
 
-/// A peer macro that marks a property to be excluded from the
-/// `DataTransferObject` macro expansion.
+/// A peer macro that excludes a property from the `@DataTransferObject`
+/// expansion.
 ///
-/// Properties annotated with `@IgnoredByDTO` are ignored during code
-/// generation — they will not appear in the generated `Configurable`
-/// or `Transferable` structs, and will be skipped in `init(_:)` and
-/// `update(using:)` implementations.
+/// Properties annotated with `@IgnoredByDTO` do not appear in the generated
+/// `Configurable` and `Transferable` structs and are skipped by
+/// `init(_:in:)` and `update(using:in:)`. They must have a default value.
 ///
-/// This is useful for private state, transient values, or properties
-/// that are managed separately from the data transfer pipeline.
+/// SwiftData's `@Transient` properties are excluded automatically.
+///
+/// Use it for caches, transient values, and one side of a many-to-many
+/// relationship.
 @attached(peer)
 public macro IgnoredByDTO() = #externalMacro(module: "Tools4SwiftDataMacros", type: "IgnoredByDTO")
 
