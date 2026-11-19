@@ -6,6 +6,7 @@
   </a>
 
   [![Swift](https://img.shields.io/badge/Swift-6.0-orange.svg)](https://swift.org/download/)
+  [![Tests](https://github.com/iOmega8561/Tools4SwiftData/actions/workflows/tests.yml/badge.svg)](https://github.com/iOmega8561/Tools4SwiftData/actions/workflows/tests.yml)
   <p>A concurrency-safe toolkit for SwiftData under Swift 6 strict concurrency.<br>Models stay inside an actor; only Sendable snapshots and drafts cross isolation boundaries.</p>
 
 </div>
@@ -33,6 +34,8 @@ Add the package in Xcode with **File > Add Packages**, using:
 ```plaintext
 https://github.com/iOmega8561/Tools4SwiftData.git
 ```
+
+Upgrading from the protocol-only version? Follow [MIGRATION.md](MIGRATION.md).
 
 ---
 
