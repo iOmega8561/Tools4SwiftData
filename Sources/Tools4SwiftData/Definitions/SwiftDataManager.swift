@@ -103,7 +103,7 @@ public final actor SwiftDataManager<Persistable: SwiftDataPersistable> {
             try configurable.validate(for: .creation)
         }
         
-        let item = Persistable(configurable)
+        let item = try Persistable(configurable, in: modelContext)
         
         modelContext.insert(item)
         try modelContext.save()
@@ -128,7 +128,7 @@ public final actor SwiftDataManager<Persistable: SwiftDataPersistable> {
             try configurable.validate(for: .creation)
         }
         
-        let item = Persistable(configurable)
+        let item = try Persistable(configurable, in: modelContext)
         
         modelContext.insert(item)
         try modelContext.save()
@@ -213,7 +213,7 @@ public final actor SwiftDataManager<Persistable: SwiftDataPersistable> {
         }
         
         try configurable.validate(for: .update)
-        try item.update(using: configurable)
+        try item.update(using: configurable, in: modelContext)
         try modelContext.save()
         
         return Transferable(item)

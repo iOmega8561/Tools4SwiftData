@@ -23,241 +23,163 @@
 
 import SwiftSyntax
 
-/// An orchestrator that performs the core macro expansion for `@Model` classes.
+/// Performs the member expansion of `@DataTransferObject` on a `@Model` class.
 ///
-/// `PersistableExpander` is the central component responsible for analyzing a
-/// `@Model` class declaration, extracting its stored properties via SwiftSyntax,
-/// and synthesizing the required conformances, methods, and associated types.
-/// It does not conform to `DynamicMemberBuilder` itself; instead, it delegates
-/// to `TransferableBuilder` and `ConfigurableBuilder` for struct generation,
-/// while producing the `init(_:)` and `update(using:)` methods directly.
+/// The expansion works in two steps:
+/// 1. `PropertyExtractor` collects the stored properties that take part in
+///    the pipeline, each classified by its `PropertyShape`.
+/// 2. `DTOBuilder` generates the `Transferable` and `Configurable` structs,
+///    while this type generates `init(_:in:)` and `update(using:in:)`.
 ///
-/// The expansion workflow consists of three phases:
-/// 1. **AST Parsing**: `extractStoredProperties()` traverses the class member
-///    block, collects variable declarations, detects `@Relationship` and
-///    `@IgnoredByDTO` attributes, and builds `StoredProperty` instances.
-/// 2. **Struct Generation**: The extracted properties are passed to
-///    `TransferableBuilder` and `ConfigurableBuilder`, which produce the
-///    corresponding `Transferable` and `Configurable` structs.
-/// 3. **Method Injection**: `makeInit()` and `makeUpdate()` generate the
-///    required `init(_ configurableModel:)` and `update(using:)` methods
-///    that are added to the original class declaration.
+/// Relationship handling is delegated to the `ModelContext` helpers defined
+/// in the `Tools4SwiftData` library (`resolveRelationship`,
+/// `resolveRequiredRelationship`, `reconcile`), which keeps the generated
+/// code short and the actual logic testable in one place.
 ///
-/// The `expand()` method returns an array of `DeclSyntax` elements that
-/// collectively replace or augment the original class declaration:
-/// - Two type aliases (`ConfigurableType`, `TransferableType`)
-/// - The generated `Transferable` struct
-/// - The generated `Configurable` struct
-/// - The `init(_:)` method
-/// - The `update(using:)` method
-///
-/// - Parameter originalClassDecl: The `ClassDeclSyntax` representing the
-///   `@Model` class being processed.
+/// Every generated declaration mirrors the access level of the class:
+/// `public` (or `open`) and `package` classes get `public` and `package`
+/// members, every other class gets internal members.
 struct PersistableExpander {
-    
-    private let originalClassDecl: ClassDeclSyntax
-    
-    /// Extracts all stored properties from the original class declaration.
-    ///
-    /// Traverses the `memberBlock.members` of the class, filtering for
-    /// `VariableDeclSyntax` nodes that have no accessor block (i.e., stored
-    /// properties, not computed or lazy properties). For each property, it
-    /// detects `@Relationship` and `@IgnoredByDTO` attributes, extracts the
-    /// type and default value, and handles implicit `nil` defaults for
-    /// optional types.
-    ///
-    /// Properties are collected in declaration order. Skipped items include
-    /// computed properties, lazy properties, and accessors.
-    ///
-    /// - Returns: An array of `StoredProperty` instances representing the
-    ///   class's stored properties.
-    private func extractStoredProperties() -> [StoredProperty] {
-        
-        var properties: [StoredProperty] = []
-        
-        for member in originalClassDecl.memberBlock.members {
-            
-            guard let varDecl = member.decl.as(VariableDeclSyntax.self),
-                  varDecl.bindings.first?.accessorBlock == nil else { continue }
 
-            let isRelationship = varDecl.attributes.contains { element in
-                guard let attr = element.as(AttributeSyntax.self) else { return false }
-                
-                let attrName = attr.attributeName.trimmedDescription
-                return attrName == "Relationship" || attrName == "SwiftData.Relationship"
-            }
-            
-            let isIgnored = varDecl.attributes.contains { element in
-                guard let attr = element.as(AttributeSyntax.self) else { return false }
-                
-                let attrName = attr.attributeName.trimmedDescription
-                return attrName == "IgnoredByDTO" || attrName == "Tools4SwiftData.IgnoredByDTO"
-            }
-            
-            for binding in varDecl.bindings {
-                guard let identifier = binding.pattern.as(IdentifierPatternSyntax.self)?.identifier.text,
-                      let typeAnnotation = binding.typeAnnotation?.type else { continue }
-                
-                // Usiamo trimmedDescription anche qui per evitare problemi con spazi extra: [ Message ] vs [Message]
-                let typeString = typeAnnotation.trimmedDescription
-                var defaultValueString = binding.initializer?.value.trimmedDescription
-                
-                // Gestione del default implicito per gli Opzionali (se manca l'inizializzatore ma c'è il '?')
-                if defaultValueString == nil && (typeString.hasSuffix("?") || typeString.hasPrefix("Optional<")) {
-                    defaultValueString = "nil"
-                }
-                
-                properties.append(StoredProperty(
-                    name: identifier,
-                    type: typeString,
-                    isRelationship: isRelationship,
-                    isIgnored: isIgnored,
-                    defaultValue: defaultValueString
-                ))
-            }
-        }
-        return properties
+    private let classDecl: ClassDeclSyntax
+    private let orphanPolicy: String
+
+    private var className: String {
+        classDecl.name.text
     }
-    
-    /// Generates the `init(_ configurableModel:)` method for the class.
+
+    private var access: String {
+        Self.accessModifier(of: classDecl)
+    }
+
+    /// Generates the `init(_:in:)` initializer required by `SwiftDataPersistable`.
     ///
-    /// Iterates through non-ignored properties and assigns each one from the
-    /// `configurableModel` parameter:
-    /// - Array relationships: each element is mapped through the corresponding
-    ///   `Configurable` initializer using `.map { }`
-    /// - Scalar properties: assigned directly
-    ///
-    /// Ignored properties are skipped entirely.
-    ///
-    /// - Parameter props: The extracted `StoredProperty` instances.
-    ///
-    /// - Returns: A `DeclSyntax` representing the generated initializer.
+    /// Attributes are copied, to-one relationships are resolved from their
+    /// identifiers and to-many relationships are materialized from the
+    /// nested drafts (existing models are reused and updated, new ones are
+    /// created and inserted).
     private func makeInit(props: [StoredProperty]) -> DeclSyntax {
-        
-        let initBody = props.compactMap { prop in
-            guard !prop.isIgnored else { return nil }
-            
-            if prop.isArray, let elementName = prop.elementTypeName {
-                return "self.\(prop.name) = configurableModel.\(prop.name).map { \(elementName)($0) }"
-            } else {
-                return "self.\(prop.name) = configurableModel.\(prop.name)"
-            }
-        }
-        .joined(separator: "\n")
-        
-        return """
-            public required init(_ configurableModel: Configurable) {
-                \(raw: initBody)
-            }
-        """
-    }
-    
-    /// Generates the `update(using:)` method for the class.
-    ///
-    /// For scalar properties, performs a direct assignment from the configurable.
-    /// For array relationships, performs a diff-based update:
-    /// 1. Builds a dictionary mapping `PersistentIdentifier` → existing entity
-    /// 2. Iterates through the configurable items, updating existing ones in place
-    ///    or creating new ones for unknown IDs
-    /// 3. Deletes orphaned entities (present in the old array but absent from
-    ///    the configurable) using `modelContext.delete(_:)`
-    ///
-    /// This ensures that relationship arrays stay in sync with the configurable
-    /// state, preserving existing entities where possible and cleaning up
-    /// deleted references.
-    ///
-    /// - Parameter props: The extracted `StoredProperty` instances.
-    ///
-    /// - Returns: A `DeclSyntax` representing the generated update method.
-    private func makeUpdate(props: [StoredProperty]) -> DeclSyntax {
+        let body = props.map { prop in
+            let value = "configurable.\(prop.name)"
 
-        var updaterBody = ""
-        for prop in props {
-            guard !prop.isIgnored else { continue }
-            
-            guard prop.isRelationship,
-                  let elementType = prop.elementTypeName else {
-                updaterBody += "\nself.\(prop.name) = configurable.\(prop.name)\n"
-                continue
+            switch prop.shape {
+            case .attribute:
+                return "self.\(prop.name) = \(value)"
+            case .toOne(let target, let isOptional):
+                let resolver = isOptional ? "resolveRelationship" : "resolveRequiredRelationship"
+                return "self.\(prop.name) = try context.\(resolver)(\(value), as: \(target).self)"
+            case .toMany(_, let isOptional):
+                let current = isOptional ? "nil" : "[]"
+                return "self.\(prop.name) = try context.reconcile(\(current), with: \(value), orphans: \(orphanPolicy))"
             }
-        
-            updaterBody += """
-            var existing\(prop.name): [PersistentIdentifier: \(elementType)] = [:]
-            for item in self.\(prop.name) {
-                existing\(prop.name)[item.persistentModelID] = item
-            }
-            var updated\(prop.name): [\(elementType)] = []
-            for config in configurable.\(prop.name) {
-                if let id = config.persistentModelID, 
-                   let existing = existing\(prop.name)[persistentModelID] {
-                    try existing.update(using: config)
-                    updated\(prop.name).append(existing)
-                    existing\(prop.name).removeValue(forKey: id)
-                } else {
-                    let newItem = \(elementType)(config)
-                    updated\(prop.name).append(newItem)
-                }
-            }
-            if let context = self.modelContext {
-                for orphaned in existing\(prop.name).values {
-                    context.delete(orphaned)
-                }
-            }
-            self.\(prop.name) = updated\(prop.name)
-            """
         }
-        
+
         return """
-            public func update(using configurable: Configurable) throws {
-                \(raw: updaterBody)
-            }
+        \(raw: access)required init(_ configurable: Configurable, in context: ModelContext) throws {
+            \(raw: body.joined(separator: "\n"))
+        }
         """
     }
-    
-    /// Orchestrates the full macro expansion by combining all generated
-    /// declarations into a single array.
+
+    /// Generates the `update(using:in:)` method required by `SwiftDataPersistable`.
     ///
-    /// The returned array contains, in order:
-    /// 1. `ConfigurableType` type alias
-    /// 2. `TransferableType` type alias
-    /// 3. `Transferable` struct
-    /// 4. `Configurable` struct
-    /// 5. `init(_ configurableModel:)` method
-    /// 6. `update(using:)` method
-    ///
-    /// - Returns: An array of `DeclSyntax` elements representing the complete
-    ///   expansion for the class.
+    /// Every property is written only when its value actually changes, so an
+    /// update with an unchanged draft leaves the model clean. To-many
+    /// relationships are reconciled: existing elements are updated in place,
+    /// elements moved from elsewhere are fetched by identifier, new drafts
+    /// become new models, and orphans are handled according to the macro's
+    /// `orphans` argument.
+    private func makeUpdate(props: [StoredProperty]) -> DeclSyntax {
+        let body = props.map { prop in
+            let current = "self.\(prop.name)"
+            let value = "configurable.\(prop.name)"
+
+            switch prop.shape {
+            case .attribute:
+                return "if \(current) != \(value) { \(current) = \(value) }"
+            case .toOne(let target, let isOptional):
+                let resolver = isOptional ? "resolveRelationship" : "resolveRequiredRelationship"
+                let currentID = isOptional ? "\(current)?.persistentModelID" : "\(current).persistentModelID"
+                return """
+                if \(currentID) != \(value) {
+                    \(current) = try context.\(resolver)(\(value), as: \(target).self)
+                }
+                """
+            case .toMany(_, let isOptional):
+                let reconciled = "\(prop.name)Reconciled"
+                let map = isOptional ? "?.map" : ".map"
+                return """
+                let \(reconciled) = try context.reconcile(\(current), with: \(value), orphans: \(orphanPolicy))
+                if \(reconciled)\(map)(\\.persistentModelID) != \(current)\(map)(\\.persistentModelID) {
+                    \(current) = \(reconciled)
+                }
+                """
+            }
+        }
+
+        return """
+        \(raw: access)func update(using configurable: Configurable, in context: ModelContext) throws {
+            \(raw: body.joined(separator: "\n"))
+        }
+        """
+    }
+
+    /// Produces every member added to the class, in order: the two type
+    /// aliases, the `Transferable` and `Configurable` structs, `init(_:in:)`
+    /// and `update(using:in:)`.
     func expand() -> [DeclSyntax] {
-        let className = originalClassDecl.name.text
-        let props = extractStoredProperties()
-        
-        let transferableStruct = TransferableBuilder(className: className, props: props).generate()
-        let configurableStruct = ConfigurableBuilder(className: className, props: props).generate()
-        
-        let typeAliasConfig: DeclSyntax = "public typealias ConfigurableType = Configurable"
-        let typeAliasTransf: DeclSyntax = "public typealias TransferableType = Transferable"
+        let props = PropertyExtractor(classDecl: classDecl).extract()
+
+        let transferable = DTOBuilder(kind: .transferable, className: className, access: access, properties: props)
+        let configurable = DTOBuilder(kind: .configurable, className: className, access: access, properties: props)
 
         return [
-            typeAliasConfig,
-            typeAliasTransf,
-            transferableStruct,
-            configurableStruct,
+            "\(raw: access)typealias ConfigurableType = Configurable",
+            "\(raw: access)typealias TransferableType = Transferable",
+            transferable.generate(),
+            configurable.generate(),
             makeInit(props: props),
             makeUpdate(props: props)
         ]
     }
-    
-    /// Initializes a `PersistableExpander` from a class declaration.
+
+    /// Initializes the expander from the macro's attribute and declaration.
     ///
-    /// The failable initializer returns `nil` if the provided declaration
-    /// is not a `ClassDeclSyntax`, ensuring that only class declarations
-    /// (specifically `@Model` classes) are processed.
-    ///
-    /// - Parameter declaration: The `DeclGroupSyntax` to analyze.
-    init?(originalDeclaration declaration: DeclGroupSyntax) {
+    /// - Returns: `nil` when the declaration is not a class.
+    init?(attribute: AttributeSyntax, declaration: some DeclGroupSyntax) {
         guard let classDecl = declaration.as(ClassDeclSyntax.self) else {
             return nil
         }
-        self.originalClassDecl = classDecl
+        self.classDecl = classDecl
+        self.orphanPolicy = Self.orphanPolicy(from: attribute)
+    }
+
+    // MARK: - Attribute and modifier parsing
+
+    /// The expression passed as the `orphans:` argument, `.detach` if omitted.
+    ///
+    /// The expression is forwarded verbatim to the generated `reconcile`
+    /// calls, so the compiler type-checks it against `OrphanPolicy`.
+    static func orphanPolicy(from attribute: AttributeSyntax) -> String {
+        guard case .argumentList(let arguments) = attribute.arguments,
+              let argument = arguments.first(where: { $0.label?.text == "orphans" }) else {
+            return ".detach"
+        }
+        return argument.expression.trimmedDescription
+    }
+
+    /// The access modifier (with a trailing space) for the generated members.
+    static func accessModifier(of classDecl: ClassDeclSyntax) -> String {
+        for modifier in classDecl.modifiers {
+            switch modifier.name.tokenKind {
+            case .keyword(.public), .keyword(.open):
+                return "public "
+            case .keyword(.package):
+                return "package "
+            default:
+                continue
+            }
+        }
+        return ""
     }
 }

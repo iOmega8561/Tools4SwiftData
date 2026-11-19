@@ -26,89 +26,50 @@ import SwiftSyntaxMacros
 import SwiftDiagnostics
 
 /// A combined `MemberMacro` and `ExtensionMacro` that generates the full
-/// protocol conformances and methods required by `SwiftDataPersistable` for
-/// an `@Model` class.
+/// data transfer pipeline of an `@Model` class.
 ///
-/// `DataTransferObject` is applied to classes annotated with `@Model` and
-/// expands them into a complete data transfer pipeline:
+/// **Member expansion** adds to the class:
+/// - `ConfigurableType` and `TransferableType` type aliases
+/// - the `Transferable` struct (immutable snapshot)
+/// - the `Configurable` struct (mutable draft)
+/// - `init(_:in:)`, which builds a model from a draft
+/// - `update(using:in:)`, which applies a draft to an existing model
 ///
-/// **Member expansion** (MemberMacro):
-/// Generates the following declarations inside the class:
-/// - `public typealias ConfigurableType = Configurable`
-/// - `public typealias TransferableType = Transferable`
-/// - The `Configurable` struct (mutable draft)
-/// - The `Transferable` struct (immutable snapshot)
-/// - `init(_ configurableModel: Configurable)` — converts a configurable draft
-///   into a persistable model
-/// - `update(using:)` — updates the model's state from a configurable draft,
-///   handling scalar assignments and relationship array diffing
+/// **Extension expansion** adds the `SwiftDataPersistable` conformance,
+/// unless the class already declares it.
 ///
-/// **Extension expansion** (ExtensionMacro):
-/// Adds a `SwiftDataPersistable` conformance extension to the class,
-/// enabling the generated types to be used within the persistence protocol
-/// hierarchy.
+/// The macro accepts an `orphans:` argument (an `OrphanPolicy`, `.detach` by
+/// default) that decides what happens to the elements removed from a to-many
+/// relationship during an update.
 ///
-/// If the target declaration is not a class (e.g., a struct or enum), the
-/// macro emits a `MacroDiagnostic.onlyClasses` error and produces no output.
-///
-/// This macro is the entry point of the macro system — applying it to an
-/// `@Model` class automatically generates the entire configurable/transferable
-/// infrastructure, enabling the `Transferable → Configurable → Persistable`
-/// conversion workflow without manual boilerplate.
-/// 
-/// - Note: The generated `Configurable` and `Transferable` structs conform
-///   to `Hashable` and `Equatable` automatically. All property types from the
-///   original `@Model` class **must be suitable for Swift's automatic
-///   Hashable/Equatable synthesis**. If a property type does not conform to
-///   `Hashable` or `Equatable`, the generated code will fail to compile.
+/// - Note: The generated structs conform to `Hashable` and `Sendable`, so
+///   every attribute type of the model must conform to both.
 public struct DataTransferObject: MemberMacro, ExtensionMacro {
-    
+
     /// Generates the member declarations for a `@Model` class.
     ///
-    /// Validates that the declaration is a class, then delegates to
-    /// `PersistableExpander` to produce the synthesized declarations.
-    /// If validation fails, emits a diagnostic and returns an empty array.
-    ///
-    /// - Parameter node: The `@DataTransferObject` attribute syntax.
-    /// - Parameter declaration: The declaration the attribute is attached to.
-    /// - Parameter context: The macro expansion context for diagnostics.
-    ///
-    /// - Returns: An array of `DeclSyntax` elements representing the expanded
-    ///   class members.
+    /// Emits `MacroDiagnostic.onlyClasses` and generates nothing when the
+    /// declaration is not a class.
     public static func expansion(
         of node: AttributeSyntax,
         providingMembersOf declaration: some DeclGroupSyntax,
         in context: some MacroExpansionContext
     ) throws -> [DeclSyntax] {
-        
-        guard let expander = PersistableExpander(
-            originalDeclaration: declaration
-        ) else {
-            let message = MacroDiagnostic.onlyClasses
-            let diagnostic = Diagnostic(node: Syntax(node), message: message)
-            context.diagnose(diagnostic)
+
+        guard let expander = PersistableExpander(attribute: node, declaration: declaration) else {
+            context.diagnose(Diagnostic(node: Syntax(node), message: MacroDiagnostic.onlyClasses))
             return []
         }
-        
+
         return expander.expand()
     }
-    
-    /// Generates the `SwiftDataPersistable` extension for a `@Model` class.
+
+    /// Generates the `SwiftDataPersistable` conformance.
     ///
-    /// This extension enables the generated `init(_:)` and `update(using:)`
-    /// methods to satisfy the protocol requirements. The extension is empty
-    /// of body members because the methods are already injected as class
-    /// members by the `MemberMacro` expansion.
-    ///
-    /// - Parameter node: The `@DataTransferObject` attribute syntax.
-    /// - Parameter declaration: The declaration the attribute is attached to.
-    /// - Parameter type: The type to extend (the class name).
-    /// - Parameter protocols: The protocols to conform to (`SwiftDataPersistable`).
-    /// - Parameter context: The macro expansion context.
-    ///
-    /// - Returns: A single `ExtensionDeclSyntax` conforming to
-    ///   `SwiftDataPersistable`, or an empty array if the declaration is
-    ///   not a class.
+    /// The extension body is empty: the requirements are satisfied by the
+    /// members added by the member expansion. The compiler only lists in
+    /// `protocols` the conformances the type does not already have, so an
+    /// explicit conformance written by the user produces no extension.
     public static func expansion(
         of node: AttributeSyntax,
         attachedTo declaration: some DeclGroupSyntax,
@@ -116,15 +77,14 @@ public struct DataTransferObject: MemberMacro, ExtensionMacro {
         conformingTo protocols: [TypeSyntax],
         in context: some MacroExpansionContext
     ) throws -> [ExtensionDeclSyntax] {
-        
-        guard let classDecl = declaration.as(ClassDeclSyntax.self) else { return [] }
-        let className = classDecl.name.text
-        
-        let ext: ExtensionDeclSyntax = try ExtensionDeclSyntax(
-            "extension \(raw: className): SwiftDataPersistable",
+
+        guard declaration.is(ClassDeclSyntax.self), !protocols.isEmpty else { return [] }
+
+        let extensionDecl = try ExtensionDeclSyntax(
+            "extension \(type.trimmed): SwiftDataPersistable",
             membersBuilder: {}
         )
-        
-        return [ext]
+
+        return [extensionDecl]
     }
 }

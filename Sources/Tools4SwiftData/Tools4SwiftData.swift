@@ -25,33 +25,41 @@ import Foundation
 
 // MARK: - Start of macro declarations
 
-/// A macro that expands an `@Model` class to automatically generate
-/// `Transferable` and `Configurable` structs, along with the required
-/// `SwiftDataPersistable` protocol conformances.
+/// A macro that expands an `@Model` class into a complete data transfer
+/// pipeline.
 ///
-/// When applied to a class annotated with `@Model`, this macro:
-/// - Generates a `Transferable` struct (immutable snapshot) for data transfer
-/// - Generates a `Configurable` struct (mutable draft) for in-place editing
-/// - Injects `init(_ configurableModel:)` and `update(using:)` methods
-/// - Adds `ConfigurableType` and `TransferableType` type aliases
-/// - Attaches a `SwiftDataPersistable` conformance extension
+/// Applied to a class annotated with `@Model`, this macro generates:
+/// - a `Transferable` struct, the immutable `Sendable` snapshot of the model
+/// - a `Configurable` struct, the mutable draft used to create and update it
+/// - `init(_:in:)` and `update(using:in:)`
+/// - the `SwiftDataPersistable` conformance
 ///
-/// The macro automatically handles relationship arrays and scalar properties,
-/// generating appropriate conversion logic between `Persistable`, `Configurable`,
-/// and `Transferable` types.
+/// Relationships must be declared with an explicit `@Relationship` attribute.
+/// To-one relationships are represented in the DTOs by the related model's
+/// `PersistentIdentifier`; to-many relationships are embedded by value as
+/// arrays of the related model's DTOs. The related model must use
+/// `@DataTransferObject` too.
 ///
-/// - Note: All property types in the annotated `@Model` class must conform
-///   to `Hashable` and `Equatable` for the generated code to compile.
+/// Embedding by value means that a many-to-many relationship would recurse
+/// forever: mark one of its two sides with `@IgnoredByDTO`.
+///
+/// - Parameter orphans: What happens to the models removed from a to-many
+///   relationship during an update. Defaults to `.detach`.
+///
+/// - Note: Every attribute type of the model must conform to `Hashable` and
+///   `Sendable`, because the generated structs do.
 @attached(member, names:
     named(Transferable),
     named(Configurable),
-    named(update),
-    named(init),             // <--- Mancava questo
-    named(ConfigurableType), // <--- Mancava questo
-    named(TransferableType)  // <--- Mancava questo
+    named(ConfigurableType),
+    named(TransferableType),
+    named(init),
+    named(update)
 )
 @attached(extension, conformances: SwiftDataPersistable)
-public macro DataTransferObject() = #externalMacro(module: "Tools4SwiftDataMacros", type: "DataTransferObject")
+public macro DataTransferObject(
+    orphans: OrphanPolicy = .detach
+) = #externalMacro(module: "Tools4SwiftDataMacros", type: "DataTransferObject")
 
 /// A peer macro that marks a property to be excluded from the
 /// `DataTransferObject` macro expansion.
