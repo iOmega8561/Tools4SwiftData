@@ -21,8 +21,6 @@
 //  Created on 19/11/2026.
 //
 
-#if canImport(Tools4SwiftDataMacros)
-
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
@@ -33,7 +31,8 @@ import XCTest
 final class ExpansionTests: XCTestCase {
 
     /// Plain attributes are copied verbatim; optionals get an implicit `nil` default.
-    func testAttributes() {
+    func testAttributes() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -149,10 +148,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// A `public` class gets `public` generated members.
-    func testPublicClassGetsPublicMembers() {
+    func testPublicClassGetsPublicMembers() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -220,10 +223,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// An `open` class gets `public` generated members.
-    func testOpenClassGetsPublicMembers() {
+    func testOpenClassGetsPublicMembers() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -291,10 +298,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// A `package` class gets `package` generated members.
-    func testPackageClassGetsPackageMembers() {
+    func testPackageClassGetsPackageMembers() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -362,10 +373,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// To-one relationships become identifiers; `Configurable` always holds an optional one.
-    func testToOneRelationships() {
+    func testToOneRelationships() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -445,10 +460,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// To-many relationships embed the related DTOs and are reconciled with the default `.detach` policy.
-    func testToManyRelationships() {
+    func testToManyRelationships() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -538,10 +557,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// The `orphans:` argument is forwarded to every `reconcile` call.
-    func testOrphansArgumentIsForwarded() {
+    func testOrphansArgumentIsForwarded() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject(orphans: .delete)
@@ -614,10 +637,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// Excluded, static and computed properties are skipped; observed properties and multi-binding declarations are kept.
-    func testExcludedAndNonStoredProperties() {
+    func testExcludedAndNonStoredProperties() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -729,10 +756,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// A model that declares `id` does not get a synthesized one.
-    func testExistingIdPropertyIsNotShadowed() {
+    func testExistingIdPropertyIsNotShadowed() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -797,10 +828,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// Module-qualified attributes and relationship types are recognized.
-    func testQualifiedAttributesAndTypes() {
+    func testQualifiedAttributesAndTypes() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @SwiftData.Model @DataTransferObject
@@ -870,10 +905,14 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// A model without properties still gets the full pipeline.
-    func testEmptyModel() {
+    func testEmptyModel() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -928,7 +967,8 @@ final class ExpansionTests: XCTestCase {
             """#,
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 }
-
-#endif

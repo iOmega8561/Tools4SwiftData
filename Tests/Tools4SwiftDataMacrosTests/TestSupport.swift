@@ -21,13 +21,13 @@
 //  Created on 19/11/2026.
 //
 
-#if canImport(Tools4SwiftDataMacros)
-
 import SwiftParser
 import SwiftSyntax
-import SwiftSyntaxMacros
+import XCTest
+
+#if canImport(Tools4SwiftDataMacros)
 import SwiftSyntaxMacroExpansion
-import SwiftSyntaxMacrosTestSupport
+import SwiftSyntaxMacros
 @testable import Tools4SwiftDataMacros
 
 /// The macros under test, keyed by the name used in source.
@@ -39,6 +39,16 @@ let testMacros: [String: MacroSpec] = [
     "DataTransferObject": MacroSpec(type: DataTransferObject.self, conformances: ["SwiftDataPersistable"]),
     "IgnoredByDTO": MacroSpec(type: IgnoredByDTO.self)
 ]
+#endif
+
+/// The error thrown by every test when the macro module cannot be imported.
+///
+/// Macros run on the host: when the tests are built for another platform
+/// (an iOS destination, for instance) the macro module is not available and
+/// the tests are reported as skipped instead of disappearing.
+func macrosUnavailable() -> XCTSkip {
+    XCTSkip("Macros are only supported when running tests for the host platform")
+}
 
 /// Parses a type, for the unit tests of the type helpers.
 func parseType(_ source: String) -> TypeSyntax {
@@ -56,5 +66,3 @@ func parseClass(_ source: String) -> ClassDeclSyntax {
     }
     fatalError("No class declaration in source")
 }
-
-#endif

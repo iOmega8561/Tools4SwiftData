@@ -21,8 +21,6 @@
 //  Created on 19/11/2026.
 //
 
-#if canImport(Tools4SwiftDataMacros)
-
 import SwiftSyntaxMacrosTestSupport
 import XCTest
 
@@ -34,7 +32,8 @@ import XCTest
 final class DiagnosticTests: XCTestCase {
 
     /// The macro only applies to classes.
-    func testStructIsRejected() {
+    func testStructIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @DataTransferObject
@@ -52,10 +51,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// The macro only applies to classes.
-    func testEnumIsRejected() {
+    func testEnumIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @DataTransferObject
@@ -73,10 +76,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// Actors are not classes: `@Model` cannot be applied to them either.
-    func testActorIsRejected() {
+    func testActorIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @DataTransferObject
@@ -94,10 +101,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// A class without `@Model` is rejected at its name.
-    func testMissingModelIsRejected() {
+    func testMissingModelIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @DataTransferObject
@@ -115,10 +126,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// An inferred type cannot be read by the macro.
-    func testMissingTypeAnnotationIsRejected() {
+    func testMissingTypeAnnotationIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -137,10 +152,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// The generated initializer cannot set an excluded property.
-    func testIgnoredPropertyWithoutDefaultIsRejected() {
+    func testIgnoredPropertyWithoutDefaultIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -159,10 +178,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// `@Transient` properties are excluded like `@IgnoredByDTO` ones.
-    func testTransientPropertyWithoutDefaultIsRejected() {
+    func testTransientPropertyWithoutDefaultIsRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -181,10 +204,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// Only `Model`, `Model?`, `[Model]` and `[Model]?` are supported, in sugared spelling.
-    func testUnsupportedRelationshipTypesAreRejected() {
+    func testUnsupportedRelationshipTypesAreRejected() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @Model @DataTransferObject
@@ -215,10 +242,14 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
     /// Every problem is reported at once, and nothing is generated.
-    func testEveryProblemIsReported() {
+    func testEveryProblemIsReported() throws {
+        #if canImport(Tools4SwiftDataMacros)
         assertMacroExpansion(
             #"""
             @DataTransferObject
@@ -243,7 +274,8 @@ final class DiagnosticTests: XCTestCase {
             ],
             macroSpecs: testMacros
         )
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 }
-
-#endif

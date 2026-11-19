@@ -21,16 +21,17 @@
 //  Created on 19/11/2026.
 //
 
-#if canImport(Tools4SwiftDataMacros)
-
 import SwiftSyntax
 import XCTest
+#if canImport(Tools4SwiftDataMacros)
 @testable import Tools4SwiftDataMacros
+#endif
 
 /// Unit tests of `TypeInspector`, which classifies types from their syntax.
 final class TypeInspectorTests: XCTestCase {
 
-    func testOptionalSpellings() {
+    func testOptionalSpellings() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let optional = ["Int?", "Int!", "Optional<Int>", "Swift.Optional<Int>", "[Int]?", "Book?"]
         for type in optional {
             XCTAssertTrue(TypeInspector.isOptional(parseType(type)), type)
@@ -40,9 +41,13 @@ final class TypeInspectorTests: XCTestCase {
         for type in nonOptional {
             XCTAssertFalse(TypeInspector.isOptional(parseType(type)), type)
         }
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testUnwrapOptionalRemovesOneSugaredLevel() {
+    func testUnwrapOptionalRemovesOneSugaredLevel() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let (wrapped, isOptional) = TypeInspector.unwrapOptional(parseType("Int??"))
         XCTAssertTrue(isOptional)
         XCTAssertEqual(wrapped.trimmedDescription, "Int?")
@@ -50,9 +55,13 @@ final class TypeInspectorTests: XCTestCase {
         let (plain, plainIsOptional) = TypeInspector.unwrapOptional(parseType("Int"))
         XCTAssertFalse(plainIsOptional)
         XCTAssertEqual(plain.trimmedDescription, "Int")
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testNominalNames() {
+    func testNominalNames() throws {
+        #if canImport(Tools4SwiftDataMacros)
         XCTAssertEqual(TypeInspector.nominalName(parseType("Book")), "Book")
         XCTAssertEqual(TypeInspector.nominalName(parseType("Library.Book")), "Library.Book")
         XCTAssertEqual(TypeInspector.nominalName(parseType("A.B.Book")), "A.B.Book")
@@ -60,9 +69,13 @@ final class TypeInspectorTests: XCTestCase {
         for type in ["Array<Book>", "[Book]", "Book?", "(Book, Book)", "any Book", "Library.Box<Book>"] {
             XCTAssertNil(TypeInspector.nominalName(parseType(type)), type)
         }
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testSupportedRelationshipShapes() {
+    func testSupportedRelationshipShapes() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let expectations: [(String, PropertyShape)] = [
             ("Book", .toOne(target: "Book", isOptional: false)),
             ("Book?", .toOne(target: "Book", isOptional: true)),
@@ -75,9 +88,13 @@ final class TypeInspectorTests: XCTestCase {
         for (type, shape) in expectations {
             XCTAssertEqual(TypeInspector.relationshipShape(of: parseType(type)), shape, type)
         }
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testUnsupportedRelationshipShapes() {
+    func testUnsupportedRelationshipShapes() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let unsupported = [
             "[String: Book]", "Array<Book>", "Set<Book>", "Optional<Book>",
             "(Book, Book)", "[Book?]", "[[Book]]", "Book??", "any Book"
@@ -85,7 +102,8 @@ final class TypeInspectorTests: XCTestCase {
         for type in unsupported {
             XCTAssertNil(TypeInspector.relationshipShape(of: parseType(type)), type)
         }
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 }
-
-#endif

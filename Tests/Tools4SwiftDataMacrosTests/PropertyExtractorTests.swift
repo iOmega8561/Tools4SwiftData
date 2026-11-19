@@ -21,21 +21,24 @@
 //  Created on 19/11/2026.
 //
 
-#if canImport(Tools4SwiftDataMacros)
-
 import SwiftSyntax
 import XCTest
+#if canImport(Tools4SwiftDataMacros)
 @testable import Tools4SwiftDataMacros
+#endif
 
 /// Unit tests of `PropertyExtractor` and of the attribute and modifier
 /// parsing of `PersistableExpander`.
 final class PropertyExtractorTests: XCTestCase {
 
+    #if canImport(Tools4SwiftDataMacros)
     private func extract(_ source: String) -> PropertyExtractor.Result {
         PropertyExtractor(classDecl: parseClass(source)).extract()
     }
+    #endif
 
-    func testExtractedPropertiesKeepDeclarationOrderAndMetadata() {
+    func testExtractedPropertiesKeepDeclarationOrderAndMetadata() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             var name: String
@@ -58,9 +61,13 @@ final class PropertyExtractorTests: XCTestCase {
         XCTAssertEqual(byName["owner"]?.shape, .toOne(target: "Owner", isOptional: true))
         XCTAssertEqual(byName["parts"]?.shape, .toMany(element: "Part", isOptional: false))
         XCTAssertEqual(byName["parts"]?.defaultValue, "[]")
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testCollectionAttributesAreNotRelationships() {
+    func testCollectionAttributesAreNotRelationships() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             var tags: [String] = []
@@ -70,9 +77,13 @@ final class PropertyExtractorTests: XCTestCase {
         """)
 
         XCTAssertEqual(result.properties.map(\.shape), [.attribute, .attribute, .attribute])
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testStorageDetection() {
+    func testStorageDetection() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             var stored: Int = 0
@@ -87,9 +98,13 @@ final class PropertyExtractorTests: XCTestCase {
         """)
 
         XCTAssertEqual(result.properties.map(\.name), ["stored", "observed"])
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testMultipleBindingsShareTheTrailingAnnotation() {
+    func testMultipleBindingsShareTheTrailingAnnotation() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             var a, b: Int
@@ -99,9 +114,13 @@ final class PropertyExtractorTests: XCTestCase {
 
         XCTAssertEqual(result.properties.map(\.name), ["a", "b", "c", "d"])
         XCTAssertEqual(result.properties.map(\.type), ["Int", "Int", "String", "Double"])
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testExcludedProperties() {
+    func testExcludedProperties() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             @IgnoredByDTO var a: Int = 0
@@ -116,9 +135,13 @@ final class PropertyExtractorTests: XCTestCase {
 
         XCTAssertTrue(result.diagnostics.isEmpty)
         XCTAssertEqual(result.properties.map(\.name), ["kept"])
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testDiagnosticsAreCollectedPerProperty() {
+    func testDiagnosticsAreCollectedPerProperty() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let result = extract("""
         final class Item {
             var inferred = 0
@@ -134,9 +157,13 @@ final class PropertyExtractorTests: XCTestCase {
             MacroDiagnostic.excludedWithoutDefault(property: "noDefault").message,
             MacroDiagnostic.unsupportedRelationship(property: "map", type: "[String: Part]").message,
         ])
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testAccessModifiers() {
+    func testAccessModifiers() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let expectations = [
             ("public final class Item {}", "public "),
             ("open class Item {}", "public "),
@@ -149,9 +176,13 @@ final class PropertyExtractorTests: XCTestCase {
         for (source, modifier) in expectations {
             XCTAssertEqual(PersistableExpander.accessModifier(of: parseClass(source)), modifier, source)
         }
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testOrphanPolicyArgument() {
+    func testOrphanPolicyArgument() throws {
+        #if canImport(Tools4SwiftDataMacros)
         func policy(_ attribute: String) -> String {
             let classDecl = parseClass("\(attribute)\nfinal class Item {}")
             let node = classDecl.attributes.compactMap { $0.as(AttributeSyntax.self) }.first!
@@ -162,9 +193,13 @@ final class PropertyExtractorTests: XCTestCase {
         XCTAssertEqual(policy("@DataTransferObject()"), ".detach")
         XCTAssertEqual(policy("@DataTransferObject(orphans: .delete)"), ".delete")
         XCTAssertEqual(policy("@DataTransferObject(orphans: OrphanPolicy.delete)"), "OrphanPolicy.delete")
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 
-    func testMessageIdentifiersAreDistinct() {
+    func testMessageIdentifiersAreDistinct() throws {
+        #if canImport(Tools4SwiftDataMacros)
         let diagnostics: [MacroDiagnostic] = [
             .onlyClasses,
             .missingModel,
@@ -175,7 +210,8 @@ final class PropertyExtractorTests: XCTestCase {
         let identifiers = Set(diagnostics.map(\.diagnosticID))
         XCTAssertEqual(identifiers.count, diagnostics.count)
         XCTAssertTrue(diagnostics.allSatisfy { $0.severity == .error })
+        #else
+        throw macrosUnavailable()
+        #endif
     }
 }
-
-#endif
