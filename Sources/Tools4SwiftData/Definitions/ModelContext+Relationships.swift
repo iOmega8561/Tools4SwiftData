@@ -73,7 +73,8 @@ extension ModelContext {
     /// Resolves an optional to-one relationship from its identifier.
     ///
     /// - Returns: `nil` when `id` is `nil`, the related model otherwise.
-    /// - Throws: An error if `id` does not identify an existing model.
+    /// - Throws: `Tools4SwiftDataError.unresolvedRelationship` if `id` does
+    ///   not identify an existing model.
     public func resolveRelationship<Model: PersistentModel>(
         _ id: PersistentIdentifier?,
         as type: Model.Type
@@ -81,20 +82,22 @@ extension ModelContext {
         guard let id else { return nil }
 
         guard let model = try existingModel(for: id, as: type) else {
-            throw Tools4SwiftData.internalError
+            throw Tools4SwiftDataError.unresolvedRelationship(id)
         }
         return model
     }
 
     /// Resolves a required to-one relationship from its identifier.
     ///
-    /// - Throws: An error if `id` is `nil` or does not identify an existing model.
+    /// - Throws: `Tools4SwiftDataError.missingRelationship` if `id` is `nil`,
+    ///   `Tools4SwiftDataError.unresolvedRelationship` if it does not
+    ///   identify an existing model.
     public func resolveRequiredRelationship<Model: PersistentModel>(
         _ id: PersistentIdentifier?,
         as type: Model.Type
     ) throws -> Model {
         guard let model = try resolveRelationship(id, as: type) else {
-            throw Tools4SwiftData.internalError
+            throw Tools4SwiftDataError.missingRelationship
         }
         return model
     }
@@ -155,7 +158,7 @@ extension ModelContext {
             } else if let moved = try existingModel(for: id, as: Element.self) {
                 model = moved
             } else {
-                throw Tools4SwiftData.internalError
+                throw Tools4SwiftDataError.unresolvedRelationship(id)
             }
 
             try model.update(using: draft, in: self)

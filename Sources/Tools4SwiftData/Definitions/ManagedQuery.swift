@@ -106,7 +106,7 @@ public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
         ///
         /// - Parameter draft: A validated `ConfigurableType` to insert.
         public func insert(_ draft: Persistable.ConfigurableType) async throws {
-            let newlySaved: Persistable.TransferableType = try await dataManager.addItem(draft)
+            let newlySaved: Persistable.TransferableType = try await dataManager.insert(draft)
             binding.wrappedValue.append(QueryResult(original: newlySaved, commit))
         }
         
@@ -121,7 +121,7 @@ public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
             guard let index = binding.wrappedValue.firstIndex(where: { $0.id == item.id }) else { return }
             let draftToSave = item.wrappedValue
             
-            let updated = try await dataManager.updateItem(id: item.id, configurable: draftToSave)
+            let updated = try await dataManager.update(id: item.id, with: draftToSave)
             binding.wrappedValue[index] = QueryResult(original: updated, commit)
         }
         
@@ -132,7 +132,7 @@ public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
             guard let index = binding.wrappedValue.firstIndex(where: { $0.id == id }) else { return }
             let draftToSave = binding.wrappedValue[index].wrappedValue
             
-            let updated = try await dataManager.updateItem(id: id, configurable: draftToSave)
+            let updated = try await dataManager.update(id: id, with: draftToSave)
             binding.wrappedValue[index] = QueryResult(original: updated, commit)
         }
         
@@ -140,7 +140,7 @@ public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
         ///
         /// - Parameter id: The `PersistentIdentifier` of the item to delete.
         public func delete(id: PersistentIdentifier) async throws {
-            try await dataManager.deleteItem(id: id)
+            try await dataManager.delete(id: id)
             binding.wrappedValue.removeAll { $0.id == id }
         }
         
@@ -150,7 +150,7 @@ public struct ManagedQuery<Persistable: SwiftDataPersistable>: DynamicProperty {
         public func delete(at offsets: IndexSet) async throws {
             let idsToDelete = offsets.map { binding.wrappedValue[$0].id }
             for id in idsToDelete {
-                try await dataManager.deleteItem(id: id)
+                try await dataManager.delete(id: id)
             }
             binding.wrappedValue.remove(atOffsets: offsets)
         }

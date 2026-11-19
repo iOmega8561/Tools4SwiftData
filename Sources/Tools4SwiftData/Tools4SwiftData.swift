@@ -22,6 +22,7 @@
 //
 
 import Foundation
+import SwiftData
 
 // MARK: - Start of macro declarations
 
@@ -76,14 +77,31 @@ public macro IgnoredByDTO() = #externalMacro(module: "Tools4SwiftDataMacros", ty
 
 // MARK: - End of macro declarations
 
-public enum Tools4SwiftData: LocalizedError {
-    case internalError
-    
+/// The errors thrown by Tools4SwiftData.
+public enum Tools4SwiftDataError: LocalizedError, Equatable {
+
+    /// No model of the expected type has the given identifier.
+    case notFound(PersistentIdentifier)
+
+    /// A draft was applied to a model other than the one it was taken from.
+    case identifierMismatch(expected: PersistentIdentifier, found: PersistentIdentifier)
+
+    /// A required to-one relationship has no identifier in the draft.
+    case missingRelationship
+
+    /// A relationship identifier does not match any model of the related type.
+    case unresolvedRelationship(PersistentIdentifier)
+
     public var errorDescription: String? {
-        
         switch self {
-        case .internalError:
-            return String(localized: "error-swiftdata", bundle: .module)
+        case .notFound:
+            String(localized: "error-not-found", bundle: .module)
+        case .identifierMismatch:
+            String(localized: "error-identifier-mismatch", bundle: .module)
+        case .missingRelationship:
+            String(localized: "error-missing-relationship", bundle: .module)
+        case .unresolvedRelationship:
+            String(localized: "error-unresolved-relationship", bundle: .module)
         }
     }
 }

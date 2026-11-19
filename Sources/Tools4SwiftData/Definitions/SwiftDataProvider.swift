@@ -24,54 +24,106 @@
 import Foundation
 import SwiftData
 
-/// The SwiftDataProvider class
+/// The owner of the `ModelContainer` shared by the app's managers.
 ///
-/// @brief
-///    Struct acting as the main provider for the `SwiftData` shared persistence container.
-///    The associated `persistenceContainer` property is an instance of the sendable `ModelContainer` class.
+/// A provider wraps one container, which can hold any number of model types
+/// in a single store: relationships between them work as usual. Managers are
+/// created per persistable type and all share the same container.
 ///
-///    - Note: This approach works because while `ModelContainer` is, in fact, `Sendable`, `ModelContext` is not,
-///    so we just leave it to the `SwiftDataManager`, that will create it's own context while keeping it concurrency safe.
-public struct SwiftDataProvider<Persistable: SwiftDataPersistable>: Sendable {
+/// `ModelContainer` is `Sendable` while `ModelContext` is not, so the provider
+/// can be passed around freely and each `SwiftDataManager` creates and keeps
+/// its own context.
+public struct SwiftDataProvider: Sendable {
 
-    /// This property holds the `ModelContainer` instance.
+    /// The shared container.
     public let persistenceContainer: ModelContainer
-    
-    /// Creates a `SwiftDataManager` instance using the shared `ModelContainer`.
+
+    /// Wraps an existing container.
     ///
-    /// - Returns: A `SwiftDataManager` instance configured using the above persistence container.
-    ///
-    /// - Note: This method simplifies access to the data manager, ensuring all operations
-    ///   are consistent with the shared persistence container.
-    public func createManager() -> SwiftDataManager<Persistable> {
-        return SwiftDataManager(modelContainer: persistenceContainer)
+    /// Use this initializer when the container needs a configuration the
+    /// other initializers do not expose (CloudKit, App Groups, multiple
+    /// configurations...).
+    public init(container: ModelContainer) {
+        self.persistenceContainer = container
     }
-    
-    /// Initializes the `SwiftDataProvider` with a specified file location for data storage.
+
+    /// Creates a provider whose store lives in a file.
     ///
     /// - Parameters:
-    ///   - location: The location URL where the persistent store file will be created. **Should point to a directory**.
-    ///   - migrationPlan: The schema migration plan type, if provided. Defaults to nil
-    /// - Throws: An error if the `ModelContainer` initialization fails.
-    ///
-    /// - Important: The initializer is public to allow external creation of `SwiftDataProvider` instances,
-    ///   but proper error handling should be implemented to manage initialization failures.
-    /// - Note: This initializer uses the associated `Persistable.self` type to compute the database file name.
-    ///   **Renaming the `Persistable` class will cause `ModelConfiguration` to point to a different location on disk.**
+    ///   - schema: The model types of the store. Use `Schema(versionedSchema:)`
+    ///     together with `migrationPlan` for versioned schemas.
+    ///   - storeName: The name of the store file, without extension. It is the
+    ///     identity of the store on disk: changing it points the provider to a
+    ///     new, empty store.
+    ///   - directory: The directory that contains the store file.
+    ///   - migrationPlan: The migration plan of the schema, if any.
+    /// - Throws: An error if the container cannot be created.
     public init(
-        writingAt location: URL,
-        migrationPlan: SchemaMigrationPlan.Type? = nil
+        schema: Schema,
+        storeName: String,
+        in directory: URL,
+        migrationPlan: (any SchemaMigrationPlan.Type)? = nil
     ) throws {
-        let name = String(describing: Persistable.self)
-        
-        let modelConfiguration = ModelConfiguration(
-            url: location.appendingPathComponent(name + ".sqlite")
+        let configuration = ModelConfiguration(
+            schema: schema,
+            url: directory.appendingPathComponent(storeName + ".sqlite")
         )
-        
+
         self.persistenceContainer = try ModelContainer(
-            for: Persistable.self,
+            for: schema,
             migrationPlan: migrationPlan,
-            configurations: modelConfiguration
+            configurations: [configuration]
         )
+    }
+
+    /// Creates a provider whose store lives in a file.
+    ///
+    /// - Parameters:
+    ///   - types: The model types of the store. Related types are included
+    ///     automatically.
+    ///   - storeName: The name of the store file, without extension.
+    ///   - directory: The directory that contains the store file.
+    /// - Throws: An error if the container cannot be created.
+    public init(
+        for types: [any PersistentModel.Type],
+        storeName: String,
+        in directory: URL
+    ) throws {
+        try self.init(schema: Schema(types), storeName: storeName, in: directory)
+    }
+
+    /// Creates a provider whose store lives only in memory, for tests and
+    /// SwiftUI previews.
+    ///
+    /// - Parameter types: The model types of the store.
+    /// - Throws: An error if the container cannot be created.
+    public static func inMemory(for types: [any PersistentModel.Type]) throws -> SwiftDataProvider {
+        let schema = Schema(types)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return SwiftDataProvider(container: try ModelContainer(for: schema, configurations: [configuration]))
+    }
+
+    /// Creates a manager for a persistable type.
+    ///
+    /// - Important: The manager works on the thread this method is called
+    ///   from: called from the main actor, it works on the main thread. Use
+    ///   `createBackgroundManager(for:)` for heavy work.
+    public func createManager<Persistable: SwiftDataPersistable>(
+        for type: Persistable.Type = Persistable.self
+    ) -> SwiftDataManager<Persistable> {
+        SwiftDataManager(modelContainer: persistenceContainer)
+    }
+
+    /// Creates a manager for a persistable type that works off the main thread.
+    ///
+    /// The manager is created from a detached task, so its context is not
+    /// bound to the caller's thread.
+    public func createBackgroundManager<Persistable: SwiftDataPersistable>(
+        for type: Persistable.Type = Persistable.self
+    ) async -> SwiftDataManager<Persistable> {
+        let container = persistenceContainer
+        return await Task.detached {
+            SwiftDataManager<Persistable>(modelContainer: container)
+        }.value
     }
 }
